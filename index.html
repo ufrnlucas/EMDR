@@ -234,42 +234,31 @@
     // 4. FUNÇÕES DE COMUNICAÇÃO BLE
     // ************************************************************
 
-    // Função para enviar o comando de 4 bytes (durationMs, intensity, command)
-    function writeConfigCharacteristic(durationMs, intensity, command){
-        if (bleServer && bleServer.connected) {
-            bleServiceFound.getCharacteristic(commandCharacteristic)
-            .then(characteristic => {
-                console.log("Found the Command characteristic: ", characteristic.uuid);
-                
-                // 1. Prepara o ArrayBuffer de 4 bytes (uint16 + uint8 + uint8)
-                const buffer = new ArrayBuffer(4);
-                const dataView = new DataView(buffer);
+   // Função writeConfigCharacteristic(durationMs, intensity, command)
+function writeConfigCharacteristic(durationMs, intensity, command){
+    // ...
+    const buffer = new ArrayBuffer(4);
+    const dataView = new DataView(buffer);
 
-                // 2. Escreve a Duração (uint16 - 2 bytes). Little-Endian (true) para compatibilidade com ESP32
-                dataView.setUint16(0, durationMs, true); 
-                // 3. Escreve a Intensidade (uint8 - 1 byte)
-                dataView.setUint8(2, intensity);
-                // 4. Escreve o Comando (uint8 - 1 byte)
-                dataView.setUint8(3, command);
+    // ORDEM ANTERIOR (Duração primeiro):
+    // dataView.setUint16(0, durationMs, true); // (2 bytes)
+    // dataView.setUint8(2, intensity);        // (1 byte)
+    // dataView.setUint8(3, command);          // (1 byte)
 
-                return characteristic.writeValue(buffer);
-            })
-            .then(() => {
-                const status = command === 1 ? "INICIADO" : "PARADO";
-                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Intensidade: ${intensity}%`;
-                latestValueSent.innerHTML = sentText;
-                latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
-                console.log("Configuração enviada via ArrayBuffer:", sentText);
-            })
-            .catch(error => {
-                console.error("Error writing to the Command characteristic: ", error);
-                alert("Erro ao enviar comando: " + error.message);
-            });
-        } else {
-            console.error ("Bluetooth is not connected. Cannot write to characteristic.")
-            window.alert("Bluetooth is not connected. \n Conecte ao BLE primeiro!")
-        }
-    }
+    // NOVA ORDEM (Intensity e Command primeiro, para corresponder à struct PACKED):
+    
+    // 1. Escreve a Intensidade (uint8 - 1 byte)
+    dataView.setUint8(0, intensity);
+    
+    // 2. Escreve o Comando (uint8 - 1 byte)
+    dataView.setUint8(1, command);
+    
+    // 3. Escreve a Duração (uint16 - 2 bytes). Little-Endian (true)
+    dataView.setUint16(2, durationMs, true); 
+    
+    return characteristic.writeValue(buffer);
+    // ...
+}
 
     // Check if BLE is available in your Browser
     function isWebBluetoothEnabled() {
