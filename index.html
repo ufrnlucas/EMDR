@@ -4,7 +4,7 @@
     <title>Dispositivo EMDR - Web BLE App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* Estilos Responsivos (Mantidos) */
+        /* Estilos Responsivos */
         body { font-family: Arial, sans-serif; margin: 10px; background-color: #f4f4f9; color: #333; }
         h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 15px; }
         input[type="number"], select, button { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 5px; }
@@ -63,7 +63,7 @@
     <button id="startButton">INICIAR Vibração Síncrona</button>
     <button id="stopButton">PARAR Vibração</button>
 
-    <p>Configuração Ativa (Lida do ESP32): <strong><span id="valueSent">Nenhuma (Desconectado)</span></strong></p>
+    <p>Configuração Ativa: <strong><span id="valueSent">Nenhuma (Desconectado)</span></strong></p>
 
 </body>
 <script>
@@ -72,10 +72,10 @@
     // ************************************************************
     
     // VARIÁVEIS BLE (UUIDS ORIGINAIS E NOME FUNCIONAL)
-    var deviceName ='ESP32'; // NOME FIXO OBRIGATÓRIO
-    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; // SERVICE UUID ORIGINAL (Funcional)
-    var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; // COMMAND UUID ORIGINAL (Write)
-    var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; // STATUS/SENSOR UUID ORIGINAL (Read)
+    var deviceName ='ESP32'; 
+    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; 
+    var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; 
+    var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; 
 
     // Variáveis DOM
     const connectButton = document.getElementById('connectBleButton');
@@ -115,8 +115,26 @@
     profileSelector.addEventListener('change', loadSelectedProfile);
 
     // ************************************************************
-    // 3. EVENTOS DE CONTROLE E ENVIO BLE
+    // 3. MAPEAMENTO E EVENTOS DE CONTROLE
     // ************************************************************
+
+    // Mapeia o valor de intensidade de 0-100 para a faixa segura de 5-80 (real)
+    function mapIntensity(userInput) {
+        userInput = Math.max(0, Math.min(100, userInput));
+        
+        const outputMin = 5;
+        const outputMax = 80;
+        const inputMax = 100;
+
+        // Fórmula: (x / B) * (D - C) + C
+        const mappedValue = (userInput / inputMax) * (outputMax - outputMin) + outputMin;
+        
+        // O comando 0 (PARAR) deve sempre enviar Intensidade 0.
+        if (userInput === 0) return 0;
+        
+        return Math.round(mappedValue);
+    }
+
 
     connectButton.addEventListener('click', (event) => {
         if (isWebBluetoothEnabled()){
@@ -145,14 +163,22 @@
     function writeConfigCharacteristic(durationMs, intensity, command){
         if (commandCharacteristicFound && bleServer && bleServer.connected) {
             
-            // CONVERTE PARA STRING SIMPLES EM VEZ DE BINÁRIO
-            const dataString = `${durationMs},${intensity},${command}`;
+            let intensityToSend = intensity;
+
+            // *** APLICA O MAPEAMENTO DE INTENSIDADE PARA ESTABILIZAR O MOTOR ***
+            if (command === 1) {
+                intensityToSend = mapIntensity(intensity);
+            }
+            
+            // 1. CONVERTE PARA STRING SIMPLES (CSV)
+            const dataString = `${durationMs},${intensityToSend},${command}`;
             
             // Converte a string em ArrayBuffer para envio via BLE
             return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
                 const status = command === 1 ? "INICIADO" : "PARADO";
-                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Intensidade: ${intensity}%`;
+                // Exibe a intensidade do USUÁRIO e a real para feedback completo
+                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensity}%, Int. Real: ${intensityToSend}%`;
                 latestValueSent.innerHTML = sentText;
                 latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
             })
@@ -169,20 +195,43 @@
     // 4. LEITURA DE FEEDBACK NA CONEXÃO
     // ************************************************************
 
-    // A função readActiveConfig() será alterada no futuro para ler a string de status.
     function readActiveConfig() {
         if (!sensorCharacteristicFound) return Promise.resolve();
 
-        // O código de leitura é temporariamente simplificado, pois o ESP32 agora envia string.
-        // A leitura de status precisa ser validada no firmware antes de ser implementada aqui.
-        latestValueSent.innerHTML = "Aguardando primeiro envio do Site...";
-        durationInput.value = 0;
-        intensityInput.value = 0;
-        intensityValue.value = "0%";
-        
-        return Promise.resolve();
-    }
+        // Esta função lê o último estado do ESP32 (4 bytes)
+        return sensorCharacteristicFound.readValue()
+            .then(value => {
+                // A decodificação binária é complexa, mas vamos ler o buffer para feedback
+                if (value.byteLength >= 4) {
+                    const dataView = new DataView(value.buffer);
+                    
+                    // Os valores são lidos na ordem correta da struct C (uint16_t, uint8_t, uint8_t)
+                    const durationMs = dataView.getUint16(0, true); // Little-Endian
+                    const intensityReal = dataView.getUint8(2);
+                    const command = dataView.getUint8(3);
+                    
+                    // CRÍTICO: Inverter o mapeamento para mostrar o valor que o USUÁRIO entende (0-100)
+                    let intensityUser = Math.round(((intensityReal - 5) / (80 - 5)) * 100);
+                    if (intensityReal === 0) intensityUser = 0; // Se o real for 0, o usuário vê 0
+                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; // Limites de segurança
 
+                    // 1. Atualiza os inputs do Site
+                    durationInput.value = durationMs;
+                    intensityInput.value = intensityUser;
+                    intensityValue.value = intensityUser + '%';
+                    
+                    // 2. Atualiza o Status de Atividade
+                    const status = command === 1 ? "VIBRANDO" : "PARADO";
+                    const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensityUser}%`;
+                    latestValueSent.innerHTML = sentText;
+                    latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
+                }
+            })
+            .catch(error => {
+                console.error("Falha ao ler a característica de status:", error);
+                latestValueSent.innerHTML = "Falha na leitura inicial. Usando 0ms/0%.";
+            });
+    }
 
     // ************************************************************
     // 5. FUNÇÕES DE CONEXÃO BLE
@@ -232,7 +281,6 @@
         durationInput.value = 0; 
         intensityInput.value = 0;
         intensityValue.value = "0%";
-
         bleStateContainer.style.color = "#dc3545";
     }
 
