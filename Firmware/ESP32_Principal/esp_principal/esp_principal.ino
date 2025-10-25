@@ -1,4 +1,4 @@
-// Arquivo: firmware/ESP32_Principal/ESP32_Principal.ino (Corrigido o Buffer de Escrita)
+// Arquivo: firmware/ESP32_Principal/ESP32_Principal.ino (Parsing CSV - Corrigido String Error)
 
 // Incluindo arquivos de cabeçalho (DEVE ESTAR NA MESMA PASTA)
 #include "ble_uuids.h" 
@@ -10,6 +10,7 @@
 #include <BLE2902.h>
 #include <string>
 #include <cstring> 
+#include <stdio.h> // Necessário para sscanf
 
 // =========================================================
 // 1. VARIÁVEIS GLOBAIS E DEFINIÇÕES
@@ -27,58 +28,92 @@ BLECharacteristic* pStatusCharacteristic = NULL;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint32_t value = 0; 
+
 const int LED_PIN = 8; 
-EmdrConfigData_t latestConfig; 
+
+// Variável que armazena o estado ativo e será lida pelo Site.
+EmdrConfigData_t latestConfig = {
+    .durationPerSideMs = 1000, 
+    .intensityPercent = 100, 
+    .command = 0 // Inicia parado
+}; 
 
 // =========================================================
-// 2. LÓGICA DE VALIDAÇÃO DE COMANDO
+// 2. LÓGICA DE VALIDAÇÃO DE COMANDO E ATUALIZAÇÃO DE STATUS
 // =========================================================
+
+void updateStatusCharacteristic() {
+    // Atualiza a Característica de Status com o último estado
+    if (pStatusCharacteristic) {
+        // Envia a struct binária (para futura implementação, mantendo o tamanho)
+        pStatusCharacteristic->setValue((uint8_t*)&latestConfig, CONFIG_DATA_SIZE);
+    }
+}
 
 void handleCommand(EmdrConfigData_t config) {
+    
+    latestConfig = config; 
+    updateStatusCharacteristic();
     
     const char* status = (config.command == 1) ? "VIBRANDO" : "PARADO";
     
     Serial.println("=============================================");
-    Serial.println(">>> RECEBIMENTO E VALIDAÇÃO DE DADOS <<<");
+    Serial.println(">>> RECEBIMENTO E VALIDAÇÃO DE DADOS (CSV) <<<");
     Serial.printf("Status: %s\n", status);
-    Serial.printf("Duração por lado (ms): %u\n", config.durationPerSideMs);
-    Serial.printf("Intensidade (0-100%%): %u\n", config.intensityPercent);
+    Serial.printf("Duração por lado (ms): %u\n", latestConfig.durationPerSideMs);
+    Serial.printf("Intensidade (0-100%%): %u\n", latestConfig.intensityPercent);
     Serial.println("=============================================");
 
     digitalWrite(LED_PIN, (config.command == 1) ? HIGH : LOW);
-
-    latestConfig = config; 
 }
 
 // =========================================================
-// 3. CALLBACKS DO SERVIDOR BLE
+// 3. CALLBACKS DO SERVIDOR BLE (PARSING CSV)
 // =========================================================
 
 class MyServerCallbacks: public BLEServerCallbacks {
   void onConnect(BLEServer* pServer) {
     deviceConnected = true;
     Serial.println("Cliente (Site Web BLE) conectado.");
+    updateStatusCharacteristic(); 
   };
 
   void onDisconnect(BLEServer* pServer) {
     deviceConnected = false;
     Serial.println("Cliente (Site Web BLE) desconectado.");
-  }};
+  }
+};
 
 class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* pCharacteristic) {
     
-    const char* rxBuffer = pCharacteristic->getValue().c_str(); 
+    // OBTEM O PONTEIRO RAW E O TAMANHO
+    const char* rxBuffer = (const char*)pCharacteristic->getData();
     size_t rxLength = pCharacteristic->getValue().length();
     
-    if (rxLength == CONFIG_DATA_SIZE) { 
-        EmdrConfigData_t incomingConfig; 
-        memcpy(&incomingConfig, rxBuffer, CONFIG_DATA_SIZE);
+    // Constrói explicitamente a std::string a partir do buffer C-style (CORRIGINDO O ERRO)
+    std::string rxValue(rxBuffer, rxLength); 
+    
+    if (rxValue.length() > 0) { 
         
-        handleCommand(incomingConfig); 
-    } else {
-        Serial.printf("Erro: Recebido %d bytes, esperado %d bytes. Ignorando.\n", 
-                      rxLength, CONFIG_DATA_SIZE);
+        uint32_t durationTemp, intensityTemp, commandTemp;
+        
+        // Tenta extrair 3 valores separados por vírgula
+        int numParsed = sscanf(rxValue.c_str(), "%u,%u,%u", 
+                               &durationTemp, &intensityTemp, &commandTemp);
+        
+        if (numParsed == 3) {
+            EmdrConfigData_t incomingConfig; 
+            
+            // Converte os uint32 temporários para os tipos da struct
+            incomingConfig.durationPerSideMs = (uint16_t)durationTemp;
+            incomingConfig.intensityPercent = (uint8_t)intensityTemp;
+            incomingConfig.command = (uint8_t)commandTemp;
+            
+            handleCommand(incomingConfig); 
+        } else {
+            Serial.printf("Erro: Parsing CSV falhou. Recebido: %s\n", rxValue.c_str());
+        }
     }
   }
 };
@@ -89,12 +124,12 @@ class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Iniciando ESP32 Principal para Validação de Dados...");
+  Serial.println("Iniciando ESP32 Principal para Validação de Dados (CSV)...");
   
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW); 
 
-  BLEDevice::init(DEVICE_NAME_FIXO); // "ESP32"
+  BLEDevice::init(DEVICE_NAME_FIXO); 
   pServer = BLEDevice::createServer();
   pServer->setCallbacks(new MyServerCallbacks());
 
@@ -103,23 +138,17 @@ void setup() {
   // 1. STATUS CHAR
   pStatusCharacteristic = pService->createCharacteristic(
                       STATUS_CHAR_UUID, 
-                      BLECharacteristic::PROPERTY_READ   |
-                      BLECharacteristic::PROPERTY_WRITE  |
-                      BLECharacteristic::PROPERTY_NOTIFY |
-                      BLECharacteristic::PROPERTY_INDICATE
+                      BLECharacteristic::PROPERTY_READ   | 
+                      BLECharacteristic::PROPERTY_NOTIFY 
                     );
   pStatusCharacteristic->addDescriptor(new BLE2902());
+  pStatusCharacteristic->setValue( (uint8_t*) &latestConfig, CONFIG_DATA_SIZE ); 
 
   // 2. COMMAND CHAR
   pCommandCharacteristic = pService->createCharacteristic(
                       COMMAND_CHAR_UUID, 
                       BLECharacteristic::PROPERTY_WRITE
                     );
-  
-  // *** CORREÇÃO CRÍTICA: DEFINIR TAMANHO DO BUFFER DE ESCRITA ***
-  // Inicializa o valor e define o tamanho máximo para 4 bytes.
-  pCommandCharacteristic->setValue( (uint8_t*) &latestConfig, CONFIG_DATA_SIZE ); 
-  
   pCommandCharacteristic->setCallbacks(new CommandCharacteristicCallbacks());
   pCommandCharacteristic->addDescriptor(new BLE2902()); 
 
@@ -141,7 +170,7 @@ void loop() {
     // Lógica de Reconexão e Notificação (Mantida)
     if (!deviceConnected && oldDeviceConnected) {
         Serial.println("Site desconectado. Reiniciando anúncio.");
-        BLEDevice::getAdvertising()->stop(); // Limpa o anúncio antes de recomeçar
+        BLEDevice::getAdvertising()->stop(); 
         delay(500); 
         pServer->startAdvertising(); 
         oldDeviceConnected = deviceConnected;
@@ -150,7 +179,8 @@ void loop() {
         oldDeviceConnected = deviceConnected;
         Serial.println("Site Conectado.");
     }
-
+    
+    // Lógica de Notificação (Mantida)
     if (deviceConnected) {
         pStatusCharacteristic->setValue(String(value).c_str());
         pStatusCharacteristic->notify();

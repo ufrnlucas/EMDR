@@ -6,8 +6,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// CRÍTICO: Força o compilador a alinhar todos os campos em 1 byte (packing).
-#pragma pack(push, 1) 
 
 // A ordem é a mesma do JavaScript: [uint16 Duração] | [uint8 Intensidade] | [uint8 Comando]
 typedef struct { 
