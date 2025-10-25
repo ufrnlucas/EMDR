@@ -6,13 +6,23 @@
 // --- Definição das Classes de Callback ---
 
 class MyServerCallbacks: public BLEServerCallbacks {
-  void onConnect(BLEServer* pServer) { deviceConnected = true; };
+  void onConnect(BLEServer* pServer) { 
+    // CRUCIAL: Força o servidor a continuar anunciando para aceitar outros clientes
+    pServer->startAdvertising(); 
+    
+    deviceConnected = true; 
+    Serial.printf("[HUB]: Novo cliente conectado. Total: %d\n", pServer->getConnectedCount());
+  };
+  
   void onDisconnect(BLEServer* pServer) {
-    deviceConnected = false;
-    Serial.println("Site desconectado.");
-    // Chamada à lógica de parada:
-    stopStimulation(); 
-    pServer->startAdvertising(); // Reinicia o Advertising
+    if (pServer->getConnectedCount() == 0) {
+        deviceConnected = false;
+        Serial.println("[HUB]: Ultimo cliente desconectado.");
+        stopStimulation(); 
+        pServer->startAdvertising(); // Garante que ele recomece a anunciar quando estiver vazio
+    } else {
+        Serial.printf("[HUB]: Cliente desconectado. Restantes: %d\n", pServer->getConnectedCount());
+    }
   }
 };
 
