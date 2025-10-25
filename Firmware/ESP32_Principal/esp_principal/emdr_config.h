@@ -6,7 +6,7 @@
 #include <BLEServer.h>
 #include <BLECharacteristic.h>
 #include "Adafruit_DRV2605.h" 
-
+#include "ble_uuids.h"
 // --- Estruturas de Dados ---
 // Assumimos que esta struct existe no projeto (data_struct.h ou aqui)
 struct EmdrConfigData_t {
@@ -17,15 +17,16 @@ struct EmdrConfigData_t {
 };
 
 // --- UUIDs de Comunicação ---
-#define DEVICE_NAME_FIXO    "ESP32" 
-#define SERVICE_UUID        "19b10000-e8f2-537e-4f6c-d104768a1214"
-#define COMMAND_CHAR_UUID   "19b10002-e8f2-537e-4f6c-d104768a1214"
-#define STATUS_CHAR_UUID    "19b10001-e8f2-537e-4f6c-d104768a1214"
-
+//#define DEVICE_NAME_FIXO    "ESP32" 
+//#define SERVICE_UUID        "19b10000-e8f2-537e-4f6c-d104768a1214"
+//#define COMMAND_CHAR_UUID   "19b10002-e8f2-537e-4f6c-d104768a1214"
+//#define STATUS_CHAR_UUID    "19b10001-e8f2-537e-4f6c-d104768a1214"
+//#define CHAR_UUID_AUX_COMMAND "19b10003-e8f2-537e-4f6c-d104768a1214"
 // --- Variáveis Globais do Projeto ---
 extern BLEServer* pServer;
 extern BLECharacteristic* pCommandCharacteristic;
 extern BLECharacteristic* pStatusCharacteristic;
+extern BLECharacteristic* pAuxCommandCharacteristic;
 extern bool deviceConnected;
 extern bool oldDeviceConnected;
 extern uint32_t value; // Contador para notificação de status

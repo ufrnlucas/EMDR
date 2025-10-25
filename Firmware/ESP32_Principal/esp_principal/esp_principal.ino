@@ -8,6 +8,7 @@
 #include "emdr_logic.h"
 
 
+
 void setup() {
     Serial.begin(115200);
     Serial.println("--- Iniciando ESP32 Principal (Fragmentado) ---");

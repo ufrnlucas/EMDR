@@ -2,7 +2,7 @@
 
 #include "ble_server.h"
 #include <BLE2902.h> // <<< CORREÇÃO: Adicionando o include necessário
-
+#include "ble_uuids.h"
 // --- Definição das Classes de Callback ---
 
 class MyServerCallbacks: public BLEServerCallbacks {
