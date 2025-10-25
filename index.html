@@ -4,7 +4,7 @@
     <title>Dispositivo EMDR - Web BLE App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* Estilos Responsivos (Omitidos para brevidade, mas mantidos no código) */
+        /* Estilos Responsivos (Mantidos) */
         body { font-family: Arial, sans-serif; margin: 10px; background-color: #f4f4f9; color: #333; }
         h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 15px; }
         input[type="number"], select, button { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 5px; }
@@ -49,10 +49,12 @@
     <br><br>
 
     <label for="durationInput">Duração de Vibração por Lado (ms):</label>
-    <input type="number" id="durationInput" min="100" max="10000" value=""> <p class="note">Mín: 100ms, Máx: 10000ms (10s).</p>
+    <input type="number" id="durationInput" min="100" max="10000" value="">
+    <p class="note">Mín: 100ms, Máx: 10000ms (10s).</p>
     
     <label for="intensityInput">Intensidade (0-100%):</label>
-    <input type="range" id="intensityInput" min="0" max="100" value="0" oninput="intensityValue.value=intensityInput.value + '%'"> <output id="intensityValue">0%</output>
+    <input type="range" id="intensityInput" min="0" max="100" value="0" oninput="intensityValue.value=intensityInput.value + '%'">
+    <output id="intensityValue">0%</output>
     <p>Use a seleção de Perfil ou ajuste manualmente os controles acima.</p>
     <hr>
 
@@ -71,7 +73,7 @@
     
     // VARIÁVEIS BLE (UUIDS ORIGINAIS E NOME FUNCIONAL)
     var deviceName ='ESP32'; // NOME FIXO OBRIGATÓRIO
-    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; // SERVICE UUID ORIGINAL
+    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; // SERVICE UUID ORIGINAL (Funcional)
     var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; // COMMAND UUID ORIGINAL (Write)
     var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; // STATUS/SENSOR UUID ORIGINAL (Read)
 
@@ -101,7 +103,6 @@
     function loadSelectedProfile() {
         const selectedOption = profileSelector.options[profileSelector.selectedIndex];
         
-        // Verifica se é a opção de placeholder
         if (selectedOption.value) {
             const duration = selectedOption.getAttribute('data-duration');
             const intensity = selectedOption.getAttribute('data-intensity');
@@ -112,7 +113,6 @@
         }
     }
     profileSelector.addEventListener('change', loadSelectedProfile);
-    // REMOVIDO: loadSelectedProfile(); // Não chama mais ao iniciar o site
 
     // ************************************************************
     // 3. EVENTOS DE CONTROLE E ENVIO BLE
@@ -141,19 +141,15 @@
     });
 
 
-    // Função para enviar o comando de 4 bytes (durationMs, intensity, command)
+    // Função para enviar o comando como string (CSV: "Duração,Intensidade,Comando")
     function writeConfigCharacteristic(durationMs, intensity, command){
         if (commandCharacteristicFound && bleServer && bleServer.connected) {
             
-            const buffer = new ArrayBuffer(4);
-            const dataView = new DataView(buffer);
-
-            // ORDEM SINCRONIZADA COM A STRUCT C/C++ PACKED: [DURAÇÃO, PADDING, INTENSIDADE, COMANDO]
-            dataView.setUint16(0, durationMs, true); 
-            dataView.setUint8(2, intensity);
-            dataView.setUint8(3, command);
-
-            return commandCharacteristicFound.writeValue(buffer)
+            // CONVERTE PARA STRING SIMPLES EM VEZ DE BINÁRIO
+            const dataString = `${durationMs},${intensity},${command}`;
+            
+            // Converte a string em ArrayBuffer para envio via BLE
+            return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
                 const status = command === 1 ? "INICIADO" : "PARADO";
                 const sentText = `Status: ${status}, Duração: ${durationMs}ms, Intensidade: ${intensity}%`;
@@ -173,49 +169,20 @@
     // 4. LEITURA DE FEEDBACK NA CONEXÃO
     // ************************************************************
 
+    // A função readActiveConfig() será alterada no futuro para ler a string de status.
     function readActiveConfig() {
         if (!sensorCharacteristicFound) return Promise.resolve();
 
-        return sensorCharacteristicFound.readValue()
-            .then(value => {
-                if (value.byteLength === 4) {
-                    const dataView = new DataView(value.buffer);
-                    
-                    // Decodificação na ordem reversa da escrita (e da struct C packed)
-                    const durationMs = dataView.getUint16(0, true); 
-                    const intensity = dataView.getUint8(2);
-                    const command = dataView.getUint8(3);
-                    
-                    // 1. Atualiza os inputs do Site
-                    durationInput.value = durationMs;
-                    intensityInput.value = intensity;
-                    intensityValue.value = intensity + '%';
-                    
-                    // 2. Atualiza o Status de Atividade
-                    const status = command === 1 ? "VIBRANDO" : "PARADO";
-                    const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Intensidade: ${intensity}%`;
-                    latestValueSent.innerHTML = sentText;
-                    latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
-                    
-                    console.log("Configuração inicial lida e aplicada.");
-                } else {
-                    console.warn(`Lido valor inesperado de bytes no status (${value.byteLength}). Esperado: 4.`);
-                    latestValueSent.innerHTML = "Lido valor inicial vazio/padrão do ESP32.";
-                    // Se a leitura falhar, preenche com 0 para estabilidade
-                    durationInput.value = 0;
-                    intensityInput.value = 0;
-                    intensityValue.value = "0%";
-                }
-            })
-            .catch(error => {
-                console.error("Falha ao ler a característica de status, carregando valores padrão: ", error);
-                // Se a leitura falhar, preenche com 0 para estabilidade
-                latestValueSent.innerHTML = "Falha na leitura inicial. Usando 0ms/0%.";
-                durationInput.value = 0;
-                intensityInput.value = 0;
-                intensityValue.value = "0%";
-            });
+        // O código de leitura é temporariamente simplificado, pois o ESP32 agora envia string.
+        // A leitura de status precisa ser validada no firmware antes de ser implementada aqui.
+        latestValueSent.innerHTML = "Aguardando primeiro envio do Site...";
+        durationInput.value = 0;
+        intensityInput.value = 0;
+        intensityValue.value = "0%";
+        
+        return Promise.resolve();
     }
+
 
     // ************************************************************
     // 5. FUNÇÕES DE CONEXÃO BLE
@@ -261,8 +228,8 @@
 
     function onDisconnected(event){
         bleStateContainer.innerHTML = "Dispositivo Desconectado";
-        latestValueSent.innerHTML = "Nenhuma (Desconectado)"; // Limpa o status
-        durationInput.value = 0; // Limpa os inputs
+        latestValueSent.innerHTML = "Nenhuma (Desconectado)"; 
+        durationInput.value = 0; 
         intensityInput.value = 0;
         intensityValue.value = "0%";
 
