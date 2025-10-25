@@ -1,13 +1,13 @@
-// Arquivo: data_struct.h (CORREÇÃO FINAL DE PACKING COM PRAGMA)
-// Arquivo: data_struct.h (Modificação Crítica)
+// Arquivo: data_struct.h (Com Modo de Atuador)
 #pragma once
 
 typedef struct {
-    // MUDANÇA: uint16_t (2 bytes) para uint32_t (4 bytes)
     uint32_t durationPerSideMs; 
     uint8_t intensityPercent;
     uint8_t command;
+    // NOVO CAMPO: 1 byte para o modo de atuação
+    uint8_t actuatorMode; // 1=Motor, 2=LED, 3=Ambos
 } EmdrConfigData_t;
 
-// CRÍTICO: O tamanho da struct MUDOU de 4 para 6 bytes (4 + 1 + 1)
-const size_t CONFIG_DATA_SIZE = 6;
+// CRÍTICO: O tamanho da struct MUDOU novamente (4 + 1 + 1 + 1)
+const size_t CONFIG_DATA_SIZE = 7;

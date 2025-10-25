@@ -55,7 +55,15 @@
     <label for="intensityInput">Intensidade (0-100%):</label>
     <input type="range" id="intensityInput" min="0" max="100" value="0" oninput="intensityValue.value=intensityInput.value + '%'">
     <output id="intensityValue">0%</output>
-    <p>Use a seleção de Perfil ou ajuste manualmente os controles acima.</p>
+    
+    <hr>
+    <h2>1.1. Atuadores</h2>
+    <label for="actuatorSelector">Selecione o Atuador:</label>
+    <select id="actuatorSelector">
+        <option value="3" selected>Vibração e Luz</option>
+        <option value="1">Apenas Vibração</option>
+        <option value="2">Luz</option>
+    </select>
     <hr>
 
     <h2>2. Controle e Início da Estimulação</h2>
@@ -86,6 +94,7 @@
     const intensityInput = document.getElementById('intensityInput');
     const intensityValue = document.getElementById('intensityValue');
     const profileSelector = document.getElementById('profileSelector');
+    const actuatorSelector = document.getElementById('actuatorSelector'); 
     const latestValueSent = document.getElementById('valueSent');
     const bleStateContainer = document.getElementById('bleState');
     
@@ -118,12 +127,12 @@
     // 3. MAPEAMENTO E EVENTOS DE CONTROLE
     // ************************************************************
 
-    // Mapeia o valor de intensidade de 0-100 para a faixa segura de 5-80 (real)
+    // Mapeia o valor de intensidade de 0-100 para a NOVA faixa segura de 5-70 (real)
     function mapIntensity(userInput) {
         userInput = Math.max(0, Math.min(100, userInput));
         
         const outputMin = 5;
-        const outputMax = 75;
+        const outputMax = 70; // NOVO LIMITE MÁXIMO
         const inputMax = 100;
 
         // Fórmula: (x / B) * (D - C) + C
@@ -146,39 +155,41 @@
     startButton.addEventListener('click', () => {
         const duration = parseInt(durationInput.value);
         const intensity = parseInt(intensityInput.value);
+        const actuatorMode = parseInt(actuatorSelector.value); 
         
-        if (isNaN(duration) || isNaN(intensity) || !bleServer || !bleServer.connected) {
-            alert("Verifique a Duração, Intensidade e a Conexão BLE.");
+        if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
+            alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
             return;
         }
-        writeConfigCharacteristic(duration, intensity, 1);
+        writeConfigCharacteristic(duration, intensity, 1, actuatorMode);
     });
 
     stopButton.addEventListener('click', () => {
-        writeConfigCharacteristic(0, 0, 0); 
+        writeConfigCharacteristic(0, 0, 0, 0); 
     });
 
 
-    // Função para enviar o comando como string (CSV: "Duração,Intensidade,Comando")
-    function writeConfigCharacteristic(durationMs, intensity, command){
+    // Função para enviar o comando como string (CSV: "Duração,IntensidadeReal,Comando,ModoAtuador")
+    function writeConfigCharacteristic(durationMs, intensity, command, actuatorMode){
         if (commandCharacteristicFound && bleServer && bleServer.connected) {
             
             let intensityToSend = intensity;
 
-            // *** APLICA O MAPEAMENTO DE INTENSIDADE PARA ESTABILIZAR O MOTOR ***
+            // APLICA O MAPEAMENTO APENAS NO MODO INICIAR
             if (command === 1) {
                 intensityToSend = mapIntensity(intensity);
             }
             
-            // 1. CONVERTE PARA STRING SIMPLES (CSV)
-            const dataString = `${durationMs},${intensityToSend},${command}`;
+            // 1. CONVERTE PARA STRING COM O QUARTO VALOR (Modo Atuador)
+            const dataString = `${durationMs},${intensityToSend},${command},${actuatorMode}`;
             
             // Converte a string em ArrayBuffer para envio via BLE
             return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
                 const status = command === 1 ? "INICIADO" : "PARADO";
-                // Exibe a intensidade do USUÁRIO e a real para feedback completo
-                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensity}%, Int. Real: ${intensityToSend}%`;
+                const actuatorText = actuatorMode === 1 ? "Vibração" : (actuatorMode === 2 ? "Luz" : "Vibração e Luz");
+                // Exibe o feedback
+                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensity}%, Atuador: ${actuatorText}`;
                 latestValueSent.innerHTML = sentText;
                 latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
             })
@@ -192,37 +203,41 @@
     }
 
     // ************************************************************
-    // 4. LEITURA DE FEEDBACK NA CONEXÃO
+    // 4. LEITURA DE FEEDBACK NA CONEXÃO 
     // ************************************************************
 
     function readActiveConfig() {
         if (!sensorCharacteristicFound) return Promise.resolve();
 
-        // Esta função lê o último estado do ESP32 (4 bytes)
+        // Espera-se ler 7 bytes (Duração 4, Int 1, Cmd 1, ModoAtuador 1)
         return sensorCharacteristicFound.readValue()
             .then(value => {
-                // A decodificação binária é complexa, mas vamos ler o buffer para feedback
-                if (value.byteLength >= 4) {
+                if (value.byteLength >= 7) {
                     const dataView = new DataView(value.buffer);
                     
-                    // Os valores são lidos na ordem correta da struct C (uint16_t, uint8_t, uint8_t)
-                    const durationMs = dataView.getUint16(0, true); // Little-Endian
-                    const intensityReal = dataView.getUint8(2);
-                    const command = dataView.getUint8(3);
+                    const durationMs = dataView.getUint32(0, true); 
+                    const intensityReal = dataView.getUint8(4);
+                    const command = dataView.getUint8(5);
+                    const actuatorMode = dataView.getUint8(6);
                     
-                    // CRÍTICO: Inverter o mapeamento para mostrar o valor que o USUÁRIO entende (0-100)
-                    let intensityUser = Math.round(((intensityReal - 5) / (75 - 5)) * 100);
-                    if (intensityReal === 0) intensityUser = 0; // Se o real for 0, o usuário vê 0
-                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; // Limites de segurança
+                    // Inverte o mapeamento (CRÍTICO: Inverter o mapeamento para 5-70)
+                    const outputMin = 5;
+                    const outputMax = 70; 
+
+                    let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
+                    if (intensityReal === 0) intensityUser = 0; 
+                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
 
                     // 1. Atualiza os inputs do Site
                     durationInput.value = durationMs;
                     intensityInput.value = intensityUser;
                     intensityValue.value = intensityUser + '%';
+                    actuatorSelector.value = actuatorMode;
                     
                     // 2. Atualiza o Status de Atividade
                     const status = command === 1 ? "VIBRANDO" : "PARADO";
-                    const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensityUser}%`;
+                    const actuatorText = actuatorMode === 1 ? "Vibração" : (actuatorMode === 2 ? "Luz" : "Ambos");
+                    const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Atuador: ${actuatorText}`;
                     latestValueSent.innerHTML = sentText;
                     latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
                 }
@@ -234,7 +249,7 @@
     }
 
     // ************************************************************
-    // 5. FUNÇÕES DE CONEXÃO BLE
+    // 5. FUNÇÕES DE CONEXÃO BLE (Mantidas)
     // ************************************************************
 
     function connectToDevice(){
@@ -254,17 +269,14 @@
         })
         .then(service => {
             bleServiceFound = service;
-            // 1. Obtém a Característica de Comando (Escrita)
             return bleServiceFound.getCharacteristic(commandCharacteristic); 
         })
         .then(charCommand => {
             commandCharacteristicFound = charCommand;
-            // 2. Obtém a Característica de Status (Leitura/Feedback)
             return bleServiceFound.getCharacteristic(sensorCharacteristic); 
         })
         .then(charStatus => {
             sensorCharacteristicFound = charStatus;
-            // 3. Lê o estado ativo do ESP32 e atualiza a UI
             return readActiveConfig();
         })
         .catch(error => {
