@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dispositivo EMDR - Web BLE App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        /* Estilos Gerais para todos os dispositivos (Mobile-First) */
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 10px; 
+            background-color: #f4f4f9; 
+            color: #333; 
+        }
+        h1, h2 { 
+            color: #007bff; 
+            border-bottom: 2px solid #ccc; 
+            padding-bottom: 5px; 
+            margin-top: 15px;
+        }
+        /* Torna inputs, selects e buttons 100% de largura no mobile */
+        input[type="number"], input[type="text"], select, button { 
+            width: 100%;
+            box-sizing: border-box; 
+            padding: 10px; 
+            margin: 8px 0; 
+            border-radius: 5px; 
+        }
+        
+        /* Estilos Específicos de Botões */
+        button { 
+            border: none; 
+            cursor: pointer; 
+            font-weight: bold; 
+            transition: background-color 0.3s;
+        }
+        #connectBleButton { background-color: #28a745; color: white; }
+        #disconnectBleButton { background-color: #dc3545; color: white; }
+        #startButton { background-color: #ffc107; color: #333; font-size: 1.2em; }
+        #stopButton { background-color: #6c757d; color: white; font-size: 1.2em; }
+        #connectBleButton:hover, #startButton:hover { opacity: 0.9; }
+
+        #bleState { font-size: 1.1em; }
+        .note { font-size: 0.8em; color: #666; }
+
+        /* Estilo para a barra de intensidade (range) */
+        input[type="range"] {
+            margin: 5px 0 5px 0;
+            width: calc(100% - 70px); 
+        }
+        #intensityValue {
+            display: inline-block;
+            width: 60px;
+            text-align: right;
+            font-weight: bold;
+        }
+
+        /* ****************************************** */
+        /* MEDIA QUERY: AJUSTES PARA TELAS MAIORES (Desktop/Tablet) */
+        /* ****************************************** */
+        @media (min-width: 600px) {
+            body { 
+                max-width: 800px; 
+                margin: 20px auto; 
+            }
+            
+            /* Reduz a largura de inputs em desktop */
+            input[type="number"], input[type="text"], select { 
+                width: 300px;
+                display: inline-block;
+            }
+
+            /* Faz os botões Connect/Disconnect ficarem lado a lado */
+            #connectBleButton, #disconnectBleButton {
+                width: auto;
+                display: inline-block;
+            }
+
+            /* Organiza Iniciar e Parar lado a lado */
+            #startButton, #stopButton {
+                width: 48%; 
+                display: inline-block;
+            }
+            
+            input[type="range"] {
+                width: 280px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Dispositivo EMDR via Web Bluetooth</h1>
+    <button id="connectBleButton">Conectar ao Dispositivo</button>
+    <button id="disconnectBleButton">Desconectar</button>
+    <p>Status BLE: <strong><span id="bleState" style="color:#dc3545;">Desconectado</span></strong></p>
+
+    <hr>
+
+    <h2>1. Configuração da Estimulação</h2>
+    
+    <label for="profileSelector">Selecione o Perfil a Configurar:</label>
+    <select id="profileSelector">
+        <option value="1" data-duration="1000" data-intensity="100">Perfil 1 (Padrão)</option>
+        <option value="2" data-duration="2000" data-intensity="80">Perfil 2 (Lento)</option>
+        <option value="3" data-duration="500" data-intensity="50">Perfil 3 (Rápido)</option>
+        <option value="4" data-duration="1500" data-intensity="30">Perfil 4 (Suave)</option>
+        <option value="5" data-duration="800" data-intensity="90">Perfil 5 (Forte)</option>
+    </select>
+    <br><br>
+
+    <label for="durationInput">Duração de Vibração por Lado (ms):</label>
+    <input type="number" id="durationInput" min="100" max="10000" value="1000"> 
+    <p class="note">Mín: 100ms, Máx: 10000ms (10s).</p>
+    
+    <label for="intensityInput">Intensidade (0-100%):</label>
+    <input type="range" id="intensityInput" min="0" max="100" value="100" oninput="intensityValue.value=intensityInput.value + '%'">
+    <output id="intensityValue">100%</output>
+    <br>
+    
+    <p>Perfil Ativo: <strong><span id="activeProfileName">Perfil 1 (Padrão)</span></strong></p>
+    <hr>
+
+    <h2>2. Controle e Início da Estimulação</h2>
+
+    <button id="startButton">INICIAR Vibração Síncrona</button>
+    <button id="stopButton">PARAR Vibração</button>
+
+    <p>Último comando enviado: <strong><span id="valueSent">Nenhum</span></strong></p>
+
+    <h2>Feedback do Dispositivo</h2>
+    <p>Valor (Sensor/Status): <span id="valueContainer">NaN</span></p>
+    <p>Última leitura: <span id="timestamp"></span></p>
+
+</body>
+<script>
+    // ************************************************************
+    // 1. VARIÁVEIS E DOM
+    // ************************************************************
+
+    // Variáveis DOM
+    const connectButton = document.getElementById('connectBleButton');
+    const disconnectButton = document.getElementById('disconnectBleButton');
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+
+    const durationInput = document.getElementById('durationInput');
+    const intensityInput = document.getElementById('intensityInput');
+    const intensityValue = document.getElementById('intensityValue');
+    const profileSelector = document.getElementById('profileSelector');
+    const activeProfileName = document.getElementById('activeProfileName'); 
+
+    const retrievedValue = document.getElementById('valueContainer');
+    const latestValueSent = document.getElementById('valueSent');
+    const bleStateContainer = document.getElementById('bleState');
+    const timestampContainer = document.getElementById('timestamp');
+
+    // Definições BLE (MANTENHA ESTAS UUIDS EM SINCRONIA COM O FIRMWARE)
+    var deviceName ='ESP32'; // Nome do ESP32 Principal
+    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214';
+    var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; // Para ENVIAR Config (4 bytes)
+    var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; // Para RECEBER Status/Sensor
+
+    // Variáveis Globais de Conexão
+    var bleServer;
+    var bleServiceFound;
+    var sensorCharacteristicFound;
+
+
+    // ************************************************************
+    // 2. LÓGICA DE CARREGAMENTO DE PERFIL
+    // ************************************************************
+
+    function loadSelectedProfile() {
+        const selectedOption = profileSelector.options[profileSelector.selectedIndex];
+        
+        if (selectedOption.value) {
+            // Pega os dados dos atributos 'data' da opção selecionada
+            const duration = selectedOption.getAttribute('data-duration');
+            const intensity = selectedOption.getAttribute('data-intensity');
+            const name = selectedOption.textContent;
+
+            // Atualiza os inputs
+            durationInput.value = duration;
+            intensityInput.value = intensity;
+            intensityValue.value = intensity + '%'; // Atualiza o display de porcentagem
+            activeProfileName.textContent = name; // Atualiza o nome do perfil ativo
+        }
+    }
+
+    // Event Listener para carregar o perfil ao mudar a seleção
+    profileSelector.addEventListener('change', loadSelectedProfile);
+
+
+    // ************************************************************
+    // 3. EVENTOS DE CONTROLE E ENVIO BLE
+    // ************************************************************
+
+    // Conexão e Desconexão
+    connectButton.addEventListener('click', (event) => {
+        if (isWebBluetoothEnabled()){
+            connectToDevice();
+        }
+    });
+    disconnectButton.addEventListener('click', disconnectDevice);
+
+    // Botões de Início/Parada (Envia 4 bytes de configuração)
+    startButton.addEventListener('click', () => {
+        // Leitura dos valores ATUAIS dos inputs (podem ter sido modificados pelo usuário)
+        const duration = parseInt(durationInput.value);
+        const intensity = parseInt(intensityInput.value);
+        
+        if (isNaN(duration) || duration < 100 || duration > 10000) {
+            alert("Duração inválida. Use um valor entre 100 e 10000 ms.");
+            return;
+        }
+        if (isNaN(intensity) || intensity < 0 || intensity > 100) {
+            alert("Intensidade inválida. Use um valor entre 0 e 100%.");
+            return;
+        }
+        if (!bleServer || !bleServer.connected) {
+            alert("Conecte ao ESP32 primeiro.");
+            return;
+        }
+        // Comando 1 para INICIAR
+        writeConfigCharacteristic(duration, intensity, 1);
+    });
+
+    stopButton.addEventListener('click', () => {
+        // Comando 0 para PARAR. Valores de Duração/Intensidade são irrelevantes (enviamos 0)
+        writeConfigCharacteristic(0, 0, 0); 
+    });
+
+
+    // ************************************************************
+    // 4. FUNÇÕES DE COMUNICAÇÃO BLE
+    // ************************************************************
+
+    // Função para enviar o comando de 4 bytes (durationMs, intensity, command)
+    function writeConfigCharacteristic(durationMs, intensity, command){
+        if (bleServer && bleServer.connected) {
+            bleServiceFound.getCharacteristic(commandCharacteristic)
+            .then(characteristic => {
+                console.log("Found the Command characteristic: ", characteristic.uuid);
+                
+                // 1. Prepara o ArrayBuffer de 4 bytes (uint16 + uint8 + uint8)
+                const buffer = new ArrayBuffer(4);
+                const dataView = new DataView(buffer);
+
+                // 2. Escreve a Duração (uint16 - 2 bytes). Little-Endian (true) para compatibilidade com ESP32
+                dataView.setUint16(0, durationMs, true); 
+                // 3. Escreve a Intensidade (uint8 - 1 byte)
+                dataView.setUint8(2, intensity);
+                // 4. Escreve o Comando (uint8 - 1 byte)
+                dataView.setUint8(3, command);
+
+                return characteristic.writeValue(buffer);
+            })
+            .then(() => {
+                const status = command === 1 ? "INICIADO" : "PARADO";
+                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Intensidade: ${intensity}%`;
+                latestValueSent.innerHTML = sentText;
+                latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
+                console.log("Configuração enviada via ArrayBuffer:", sentText);
+            })
+            .catch(error => {
+                console.error("Error writing to the Command characteristic: ", error);
+                alert("Erro ao enviar comando: " + error.message);
+            });
+        } else {
+            console.error ("Bluetooth is not connected. Cannot write to characteristic.")
+            window.alert("Bluetooth is not connected. \n Conecte ao BLE primeiro!")
+        }
+    }
+
+    // Check if BLE is available in your Browser
+    function isWebBluetoothEnabled() {
+        if (!navigator.bluetooth) {
+            console.log("Web Bluetooth API is not available in this browser!");
+            bleStateContainer.innerHTML = "Web Bluetooth API indisponível!";
+            return false
+        }
+        console.log('Web Bluetooth API supported in this browser.');
+        return true
+    }
+
+    // Conecta ao Dispositivo BLE
+    function connectToDevice(){
+        console.log('Initializing Bluetooth...');
+        navigator.bluetooth.requestDevice({
+            filters: [{name: deviceName}],
+            optionalServices: [bleService]
+        })
+        .then(device => {
+            console.log('Device Selected:', device.name);
+            bleStateContainer.innerHTML = 'Conectado a ' + device.name;
+            bleStateContainer.style.color = "#24af37";
+            device.addEventListener('gattservicedisconnected', onDisconnected);
+            return device.gatt.connect();
+        })
+        .then(gattServer =>{
+            bleServer = gattServer;
+            console.log("Connected to GATT Server");
+            return bleServer.getPrimaryService(bleService);
+        })
+        .then(service => {
+            bleServiceFound = service;
+            console.log("Service discovered:", service.uuid);
+            // Tenta obter a Characteristic de leitura/notificação
+            return service.getCharacteristic(sensorCharacteristic); 
+        })
+        .then(characteristic => {
+            console.log("Sensor Characteristic discovered:", characteristic.uuid);
+            sensorCharacteristicFound = characteristic;
+            characteristic.addEventListener('characteristicvaluechanged', handleCharacteristicChange);
+            characteristic.startNotifications();
+            console.log("Notifications Started.");
+            return characteristic.readValue();
+        })
+        .then(value => {
+            const decodedValue = new TextDecoder().decode(value);
+            retrievedValue.innerHTML = decodedValue;
+        })
+        .catch(error => {
+            console.log('Error: ', error);
+            alert("Erro de Conexão ou Serviço: " + error.message);
+            bleStateContainer.innerHTML = "Falha na Conexão";
+            bleStateContainer.style.color = "#dc3545";
+        })
+    }
+
+    function onDisconnected(event){
+        console.log('Device Disconnected:', event.target.device.name);
+        bleStateContainer.innerHTML = "Dispositivo Desconectado";
+        bleStateContainer.style.color = "#dc3545";
+    }
+
+    function handleCharacteristicChange(event){
+        // Trata dados recebidos via NOTIFY (ex: status do motor)
+        const newValueReceived = new TextDecoder().decode(event.target.value);
+        console.log("Characteristic value changed: ", newValueReceived);
+        retrievedValue.innerHTML = newValueReceived;
+        timestampContainer.innerHTML = getDateTime();
+    }
+
+    function disconnectDevice() {
+        if (bleServer && bleServer.connected) {
+            // Desconecta o servidor GATT e dispara o evento onDisconnected
+            bleServer.disconnect();
+        } else {
+            console.error("Bluetooth já está desconectado.");
+            window.alert("Bluetooth já está desconectado.")
+        }
+    }
+
+    function getDateTime() {
+        var currentdate = new Date();
+        var day = ("00" + currentdate.getDate()).slice(-2); 
+        var month = ("00" + (currentdate.getMonth() + 1)).slice(-2);
+        var year = currentdate.getFullYear();
+        var hours = ("00" + currentdate.getHours()).slice(-2);
+        var minutes = ("00" + currentdate.getMinutes()).slice(-2);
+        var seconds = ("00" + currentdate.getSeconds()).slice(-2);
+
+        return day + "/" + month + "/" + year + " " + hours + ":" + minutes + ":" + seconds;
+    }
+
+    // ************************************************************
+    // 5. INICIALIZAÇÃO
+    // ************************************************************
+    loadSelectedProfile();
+</script>
+</html>
