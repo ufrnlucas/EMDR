@@ -60,9 +60,9 @@
     <h2>1.1. Atuadores</h2>
     <label for="actuatorSelector">Selecione o Atuador:</label>
     <select id="actuatorSelector">
-        <option value="3" selected>Vibração e Luz</option>
-        <option value="1">Apenas Vibração</option>
-        <option value="2">Luz</option>
+        <option value="3" selected>Ambos (Motor e LED)</option>
+        <option value="1">Apenas Motor</option>
+        <option value="2">Apenas LED</option>
     </select>
     <hr>
 
@@ -187,7 +187,7 @@
             return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
                 const status = command === 1 ? "INICIADO" : "PARADO";
-                const actuatorText = actuatorMode === 1 ? "Vibração" : (actuatorMode === 2 ? "Luz" : "Vibração e Luz");
+                const actuatorText = actuatorMode === 1 ? "Motor" : (actuatorMode === 2 ? "LED" : "Ambos");
                 // Exibe o feedback
                 const sentText = `Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensity}%, Atuador: ${actuatorText}`;
                 latestValueSent.innerHTML = sentText;
@@ -236,7 +236,7 @@
                     
                     // 2. Atualiza o Status de Atividade
                     const status = command === 1 ? "VIBRANDO" : "PARADO";
-                    const actuatorText = actuatorMode === 1 ? "Vibração" : (actuatorMode === 2 ? "Luz" : "Ambos");
+                    const actuatorText = actuatorMode === 1 ? "Motor" : (actuatorMode === 2 ? "LED" : "Ambos");
                     const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Atuador: ${actuatorText}`;
                     latestValueSent.innerHTML = sentText;
                     latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
