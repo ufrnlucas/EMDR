@@ -1,4 +1,4 @@
-// Arquivo: firmware/ESP32_Principal/ESP32_Principal.ino (Gateway FINAL)
+// Arquivo: firmware/ESP32_Principal/ESP32_Principal.ino (Gateway FINAL - Escopo Corrigido)
 
 // Bibliotecas e Headers
 #include "data_struct.h" 
@@ -15,10 +15,10 @@
 #include <stdio.h> 
 
 // =========================================================
-// 1. DEFINIÇÕES GLOBAIS E DRIVERS
+// 1. DEFINIÇÕES GLOBAIS E DRIVERS (TODAS AS VARIÁVEIS AQUI)
 // =========================================================
 
-// Variáveis Globais (Definidas no topo para garantir o escopo)
+// Variáveis de Servidor BLE (Site)
 BLEServer* pServer = NULL;
 BLECharacteristic* pCommandCharacteristic = NULL; 
 BLECharacteristic* pStatusCharacteristic = NULL; 
@@ -26,33 +26,32 @@ bool deviceConnected = false;
 bool oldDeviceConnected = false; 
 uint32_t value = 0; 
 
+// Variáveis Cliente BLE (Comunicação com o Escravo) - CORRIGIDAS
+BLEAdvertisedDevice* pServerEscravo = nullptr; 
+bool doScan = true; 
+bool connectedEscravo = false; 
+BLERemoteCharacteristic* pSyncCharacteristic = nullptr; 
+BLEClient* pClientEscravo = nullptr; 
+
 // Configuração BLE Servidor (Site)
 #define SERVICE_UUID        "19b10000-e8f2-537e-4f6c-d104768a1214"
 #define COMMAND_CHAR_UUID   "19b10002-e8f2-537e-4f6c-d104768a1214"
 #define STATUS_CHAR_UUID    "19b10001-e8f2-537e-4f6c-d104768a1214"
 #define DEVICE_NAME_FIXO    "ESP32" 
 
-// Configuração DRV2605L (Ambos DRV2605L usam 0x5A, pois estão em barramentos separados)
+// Configuração DRV2605L (Motor 2 Local)
 const uint8_t DRV_ADDR_M2   = 0x5A;     
-Adafruit_DRV2605 drv_m2; // Inicialização padrão (assume 0x5A)
+Adafruit_DRV2605 drv_m2; 
 
-// Variáveis Cliente BLE (Comunicação com o Escravo)
-static BLEAdvertisedDevice* pServerEscravo = nullptr; 
-static bool doScan = true; 
-static bool connectedEscravo = false; 
-// Características de Sincronização (UUIDs de ble_uuids.h)
-static BLERemoteCharacteristic* pSyncCharacteristic = nullptr; 
-static BLEClient* pClientEscravo = nullptr; 
-
-// Estrutura de Pulso para Envio BLE (Intensidade/Comando)
+// Estrutura de Pulso para Envio BLE 
 typedef struct { uint8_t intensity; uint8_t command; } MotorPulse_t;
-const size_t PULSE_DATA_SIZE = 2; // Tamanho do pulso (Intensidade + Comando)
+const size_t PULSE_DATA_SIZE = 2; 
 
-// Variáveis de Controle
+// Variáveis de Controle do Ciclo
 EmdrConfigData_t currentConfig = {1000, 100, 0}; 
 bool isRunning = false;
 unsigned long lastToggleTime = 0;
-bool isMotor1Active = false; // true: Motor 1 (Escravo); false: Motor 2 (Local)
+bool isMotor1Active = false; 
 const int LED_PIN = 8; 
 
 // =========================================================
@@ -60,8 +59,6 @@ const int LED_PIN = 8;
 // =========================================================
 
 void setupDRV(Adafruit_DRV2605& drv, uint8_t addr) {
-    // Inicialização final do DRV2605L Local (Motor 2)
-    // O endereço é definido via construtor (drv_m2), mas begin() usa o barramento Wire
     if (!drv.begin()) { 
         Serial.printf("ERRO: DRV2605L não encontrado (Endereço 0x%X)\n", addr);
         return;
@@ -76,13 +73,13 @@ void setMotorIntensity(Adafruit_DRV2605& drv, uint8_t intensity) {
     drv.setRealtimeValue(duty);
 }
 
-// Funções de Cliente BLE
+// Funções de Conexão (Cliente BLE)
 bool connectToEscravo();
 
 // Envia o pulso de 2 bytes via BLE para o ESP32 Escravo (Motor 1)
 void sendBLEPulse(uint8_t intensity, uint8_t command) {
-    if (!connectedEscravo || pSyncCharacteristic == nullptr) {
-        // Tenta reconectar ou escanear
+    // VARIÁVEIS DE ESCOPO GLOBAL CORRIGIDAS
+    if (!connectedEscravo || pSyncCharacteristic == nullptr) { 
         Serial.println("-> [PRINC]: Escravo desconectado. Pulso não enviado.");
         doScan = true;
         return;
@@ -90,7 +87,6 @@ void sendBLEPulse(uint8_t intensity, uint8_t command) {
     
     MotorPulse_t pulse = {intensity, command};
     
-    // Envia o Array de 2 bytes (Intensidade + Comando)
     if (!pSyncCharacteristic->writeValue((uint8_t*)&pulse, PULSE_DATA_SIZE, false)) {
         Serial.println("-> [PRINC]: Falha na escrita BLE. Desconectando Cliente.");
         pClientEscravo->disconnect();
@@ -111,8 +107,8 @@ void updateStatusCharacteristic() {
 
 void stopStimulation() {
     isRunning = false;
-    setMotorIntensity(drv_m2, 0); // Desliga Motor 2 (Local DRV)
-    sendBLEPulse(0, 0); // Envia PARAR para Motor 1 (Escravo)
+    setMotorIntensity(drv_m2, 0); 
+    sendBLEPulse(0, 0); 
     digitalWrite(LED_PIN, LOW);
     Serial.println("-> [PRINC]: Estimulação PARADA.");
 }
@@ -122,19 +118,23 @@ void handleCommand(EmdrConfigData_t config) {
     updateStatusCharacteristic();
     
     Serial.println("=============================================");
-    Serial.printf(">>> Site Enviou: Duração %u, Int %u, Cmd %u\n", 
-                  config.durationPerSideMs, config.intensityPercent, config.command);
+    Serial.printf(">>> Site Enviou: Duração %lu, Int %u, Cmd %u\n", 
+                  currentConfig.durationPerSideMs, config.intensityPercent, config.command);
     Serial.println("=============================================");
 
     if (config.command == 1 && currentConfig.intensityPercent > 0) {
+        
         isRunning = true;
         digitalWrite(LED_PIN, HIGH);
         
+        lastToggleTime = millis(); 
+        
         isMotor1Active = true; 
-        sendBLEPulse(currentConfig.intensityPercent, 1); // Liga Motor 1 (Escravo)
-        setMotorIntensity(drv_m2, 0); // Garante Motor 2 Desligado (Local DRV)
-        lastToggleTime = millis();
-        Serial.println("-> [PRINC]: Ciclo INICIADO. Ativo: Motor 1 (Escravo).");
+        sendBLEPulse(currentConfig.intensityPercent, 1); 
+        setMotorIntensity(drv_m2, 0); 
+        
+        Serial.println("-> [PRINC]: Ciclo REINICIADO com novo tempo. Ativo: Motor 1 (Escravo).");
+        
     } else {
         stopStimulation();
     }
@@ -146,7 +146,6 @@ void handleCommand(EmdrConfigData_t config) {
 
 class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     void onResult(BLEAdvertisedDevice advertisedDevice) {
-        // DEVICE_NAME_ESCRAVO vem de ble_uuids.h
         if (advertisedDevice.getName() == DEVICE_NAME_ESCRAVO) { 
             advertisedDevice.getScan()->stop(); 
             pServerEscravo = new BLEAdvertisedDevice(advertisedDevice);
@@ -158,25 +157,16 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 bool connectToEscravo() {
     if (pServerEscravo == nullptr) return false;
 
-    if (pClientEscravo != nullptr && pClientEscravo->isConnected()) {
-        pClientEscravo->disconnect();
-        delay(10);
-    }
+    if (pClientEscravo != nullptr && pClientEscravo->isConnected()) { pClientEscravo->disconnect(); delay(10); }
     
     pClientEscravo = BLEDevice::createClient();
     if (!pClientEscravo->connect(pServerEscravo)) return false;
 
     BLERemoteService* pRemoteService = pClientEscravo->getService(SERVICE_UUID_INT);
-    if (pRemoteService == nullptr) {
-        pClientEscravo->disconnect();
-        return false;
-    }
+    if (pRemoteService == nullptr) { pClientEscravo->disconnect(); return false; }
 
     pSyncCharacteristic = pRemoteService->getCharacteristic(CHAR_UUID_SYNC_INT);
-    if (pSyncCharacteristic == nullptr || !pSyncCharacteristic->canWrite()) {
-        pClientEscravo->disconnect();
-        return false;
-    }
+    if (pSyncCharacteristic == nullptr || !pSyncCharacteristic->canWrite()) { pClientEscravo->disconnect(); return false; }
     
     connectedEscravo = true;
     return true;
@@ -191,7 +181,7 @@ class MyServerCallbacks: public BLEServerCallbacks {
   void onDisconnect(BLEServer* pServer) { 
     deviceConnected = false; 
     Serial.println("Site desconectado."); 
-    stopStimulation(); // Desliga motores ao desconectar
+    stopStimulation(); 
   }
 };
 
@@ -207,7 +197,7 @@ class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
         
         if (numParsed == 3) {
             EmdrConfigData_t incomingConfig; 
-            incomingConfig.durationPerSideMs = (uint16_t)durationTemp;
+            incomingConfig.durationPerSideMs = durationTemp; 
             incomingConfig.intensityPercent = (uint8_t)intensityTemp;
             incomingConfig.command = (uint8_t)commandTemp;
             handleCommand(incomingConfig); 
@@ -220,15 +210,9 @@ void setup() {
     Serial.begin(115200);
     Serial.println("Iniciando ESP32 Principal (Gateway FINAL)...");
     
-    // 5.1. Inicialização de Hardware
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW); 
     
-    // 5.2. Inicializa o driver DRV2605L Local (Motor 2)
-    // O DRV2605L local usa o barramento I2C padrão do ESP32 (GPIO 21/22 se não for definido).
-    if (!drv_m2.begin()) { // Tenta inicializar com endereço 0x5A
-        Serial.println("ERRO FATAL: DRV2605L Motor 2 não encontrado.");
-    }
     setupDRV(drv_m2, DRV_ADDR_M2);
 
     // 5.3. Configuração BLE (Servidor)
@@ -254,7 +238,7 @@ void setup() {
     BLEScan* pBLEScan = BLEDevice::getScan();
     pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
     pBLEScan->setActiveScan(true); 
-    pBLEScan->start(5, false); // Scan inicial de 5s
+    pBLEScan->start(5, false);
 }
 
 // =========================================================
@@ -272,10 +256,12 @@ void loop() {
                 // Ativa Motor 1 (Escravo BLE), Desliga Motor 2 (Local DRV)
                 setMotorIntensity(drv_m2, 0); 
                 sendBLEPulse(currentConfig.intensityPercent, 1); 
+                Serial.println("[PRINC]: Alternando para Motor 1 (Escravo).");
             } else {
                 // Ativa Motor 2 (Local DRV), Desliga Motor 1 (Escravo BLE)
                 setMotorIntensity(drv_m2, currentConfig.intensityPercent);
                 sendBLEPulse(0, 0); 
+                Serial.println("[PRINC]: Alternando para Motor 2 (Local).");
             }
             
             lastToggleTime = millis();
@@ -291,7 +277,7 @@ void loop() {
             doScan = true; 
         }
     } else if (doScan) {
-        BLEDevice::getScan()->start(5, false); // Escaneia por 5s
+        BLEDevice::getScan()->start(5, false);
         doScan = false;
         pServerEscravo = nullptr; 
     }

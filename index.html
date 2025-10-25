@@ -123,7 +123,7 @@
         userInput = Math.max(0, Math.min(100, userInput));
         
         const outputMin = 5;
-        const outputMax = 80;
+        const outputMax = 75;
         const inputMax = 100;
 
         // Fórmula: (x / B) * (D - C) + C
@@ -211,7 +211,7 @@
                     const command = dataView.getUint8(3);
                     
                     // CRÍTICO: Inverter o mapeamento para mostrar o valor que o USUÁRIO entende (0-100)
-                    let intensityUser = Math.round(((intensityReal - 5) / (80 - 5)) * 100);
+                    let intensityUser = Math.round(((intensityReal - 5) / (75 - 5)) * 100);
                     if (intensityReal === 0) intensityUser = 0; // Se o real for 0, o usuário vê 0
                     if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; // Limites de segurança
 
