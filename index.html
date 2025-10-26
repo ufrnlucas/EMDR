@@ -245,8 +245,9 @@
                 latestValueSent.innerHTML = sentText;
                 latestValueSent.style.color = actionType === 2 ? '#ffc107' : (command === 1 ? '#007bff' : '#333');
                 
+                // Se salvamos, esperamos um pouco e lemos os perfis para atualizar a cache do JS
                 if (actionType === 2) {
-                    readAllProfiles();
+                    setTimeout(readAllProfiles, 500); // Espera 500ms para o ESP32 salvar na EEPROM
                 }
             })
             .catch(error => {
@@ -311,7 +312,9 @@
                     });
                 }
 
-                profileSelector.value = "1";
+                // Seleciona o perfil que estava ativo ou o Perfil 1
+                const currentProfileId = profileSelector.value || "1";
+                profileSelector.value = currentProfileId;
                 loadSelectedProfile(); 
                 
                 logDebug("LOG: Todos os 5 perfis carregados e cache atualizada!");
