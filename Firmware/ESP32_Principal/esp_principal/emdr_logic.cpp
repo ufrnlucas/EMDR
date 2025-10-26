@@ -136,7 +136,7 @@ void run_emdr_cycle() {
     if (pStatusCharacteristic && deviceConnected) {
         updateStatusCharacteristic();
         // O valor do contador 'value' é atualizado via global_vars
-        pStatusCharacteristic->setValue(String(value++).c_str());
+        //pStatusCharacteristic->setValue(String(value++).c_str()); //LEMBRAR DE TIRAR O COMENTÁRIO
         pStatusCharacteristic->notify();
     }
 

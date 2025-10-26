@@ -1,443 +1,443 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dispositivo EMDR - Web BLE App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        /* Estilos Responsivos */
-        body { font-family: Arial, sans-serif; margin: 10px; background-color: #f4f4f9; color: #333; }
-        h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 15px; }
-        input[type="number"], select, button { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 5px; }
-        button { border: none; cursor: pointer; font-weight: bold; transition: background-color 0.3s; }
-        #connectBleButton { background-color: #28a745; color: white; }
-        #disconnectBleButton { background-color: #dc3545; color: white; }
-        #startButton { background-color: #007bff; color: white; font-size: 1.2em; }
-        #saveButton { background-color: #ffc107; color: #333; font-size: 1.2em; }
-        #stopButton { background-color: #6c757d; color: white; font-size: 1.2em; }
-        #bleState { font-size: 1.1em; }
-        .note { font-size: 0.8em; color: #666; }
-        input[type="range"] { margin: 5px 0 5px 0; width: calc(100% - 70px); }
-        #intensityValue { display: inline-block; width: 60px; text-align: right; font-weight: bold; }
+    <title>Dispositivo EMDR - Web BLE App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        /* Estilos Omitidos para concisão */
+        body { font-family: Arial, sans-serif; margin: 10px; background-color: #f4f4f9; color: #333; }
+        h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 15px; }
+        input[type="number"], select, button { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 5px; }
+        button { border: none; cursor: pointer; font-weight: bold; transition: background-color 0.3s; }
+        #connectBleButton { background-color: #28a745; color: white; }
+        #disconnectBleButton { background-color: #dc3545; color: white; }
+        #startButton { background-color: #007bff; color: white; font-size: 1.2em; }
+        #saveButton { background-color: #ffc107; color: #333; font-size: 1.2em; }
+        #stopButton { background-color: #6c757d; color: white; font-size: 1.2em; }
+        #bleState { font-size: 1.1em; }
+        .note { font-size: 0.8em; color: #666; }
+        input[type="range"] { margin: 5px 0 5px 0; width: calc(100% - 70px); }
+        #intensityValue { display: inline-block; width: 60px; text-align: right; font-weight: bold; }
 
-        @media (min-width: 600px) {
-            body { max-width: 800px; margin: 20px auto; }
-            input[type="number"], input[type="text"], select { width: 300px; display: inline-block; }
-            #connectBleButton, #disconnectBleButton { width: auto; display: inline-block; }
-            #startButton, #stopButton, #saveButton { width: 32%; display: inline-block; }
-            input[type="range"] { width: 280px; }
-        }
-    </style>
+        @media (min-width: 600px) {
+            body { max-width: 800px; margin: 20px auto; }
+            input[type="number"], input[type="text"], select { width: 300px; display: inline-block; }
+            #connectBleButton, #disconnectBleButton { width: auto; display: inline-block; }
+            #startButton, #stopButton, #saveButton { width: 32%; display: inline-block; }
+            input[type="range"] { width: 280px; }
+        }
+    </style>
 </head>
 <body>
-    <h1>Dispositivo EMDR via Web Bluetooth</h1>
-    <button id="connectBleButton">Conectar ao Dispositivo</button>
-    <button id="disconnectBleButton">Desconectar</button>
-    <p>Status BLE: <strong><span id="bleState" style="color:#dc3545;">Desconectado</span></strong></p>
+    <h1>Dispositivo EMDR via Web Bluetooth</h1>
+    <button id="connectBleButton">Conectar ao Dispositivo</button>
+    <button id="disconnectBleButton">Desconectar</button>
+    <p>Status BLE: <strong><span id="bleState" style="color:#dc3545;">Desconectado</span></strong></p>
 
-    <div id="debugContainer" style="border: 1px solid #ccc; padding: 10px; margin-top: 20px; background-color: #fff3cd;">
-        <h3 style="margin-top: 0; color: #856404;">Monitor de Debug BLE</h3>
-        <pre id="debugOutput" style="white-space: pre-wrap; word-break: break-all; font-size: 0.8em; color: #000;"></pre>
-    </div>
-    <hr>
+    <div id="debugContainer" style="border: 1px solid #ccc; padding: 10px; margin-top: 20px; background-color: #fff3cd;">
+        <h3 style="margin-top: 0; color: #856404;">Monitor de Debug BLE</h3>
+        <pre id="debugOutput" style="white-space: pre-wrap; word-break: break-all; font-size: 0.8em; color: #000;"></pre>
+    </div>
+    <hr>
 
-    <h2>1. Configuração e Seleção de Perfil</h2>
-    
-    <label for="profileSelector">Selecione o **Slot de Perfil** (1-5):</label>
-    <select id="profileSelector">
-        <option value="0">-- Configuração Direta (Não salva/carrega) --</option>
-        <option value="1">Perfil 1</option>
-        <option value="2">Perfil 2</option>
-        <option value="3">Perfil 3</option>
-        <option value="4">Perfil 4</option>
-        <option value="5">Perfil 5</option>
-    </select>
-    <p class="note">A seleção de um perfil é para SALVAR ou CARREGAR a configuração da EEPROM.</p>
-    <br>
+    <h2>1. Configuração e Seleção de Perfil</h2>
+    
+    <label for="profileSelector">Selecione o **Slot de Perfil** (1-5):</label>
+    <select id="profileSelector">
+        <option value="0">-- Configuração Direta (Não salva/carrega) --</option>
+        <option value="1">Perfil 1</option>
+        <option value="2">Perfil 2</option>
+        <option value="3">Perfil 3</option>
+        <option value="4">Perfil 4</option>
+        <option value="5">Perfil 5</option>
+    </select>
+    <p class="note">A seleção de um perfil é para SALVAR ou CARREGAR a configuração da EEPROM.</p>
+    <br>
 
-    <label for="durationInput">Duração de Vibração por Lado (ms):</label>
-    <input type="number" id="durationInput" min="100" max="10000" value="1000">
-    <p class="note">Mín: 100ms, Máx: 10000ms (10s).</p>
-    
-    <label for="intensityInput">Intensidade (0-100%):</label>
-    <input type="range" id="intensityInput" min="0" max="100" value="0" oninput="intensityValue.value=intensityInput.value + '%'">
-    <output id="intensityValue">0%</output>
-    
-    <hr>
-    <h2>1.1. Atuadores</h2>
-    <label for="actuatorSelector">Selecione o Atuador:</label>
-    <select id="actuatorSelector">
-        <option value="3" selected>Ambos (Motor e LED)</option>
-        <option value="1">Apenas Motor</option>
-        <option value="2">Apenas LED</option>
-    </select>
-    <hr>
+    <label for="durationInput">Duração de Vibração por Lado (ms):</label>
+    <input type="number" id="durationInput" min="100" max="10000" value="1000">
+    <p class="note">Mín: 100ms, Máx: 10000ms (10s).</p>
+    
+    <label for="intensityInput">Intensidade (0-100%):</label>
+    <input type="range" id="intensityInput" min="0" max="100" value="0" oninput="intensityValue.value=intensityInput.value + '%'">
+    <output id="intensityValue">0%</output>
+    
+    <hr>
+    <h2>1.1. Atuadores</h2>
+    <label for="actuatorSelector">Selecione o Atuador:</label>
+    <select id="actuatorSelector">
+        <option value="3" selected>Ambos (Motor e LED)</option>
+        <option value="1">Apenas Motor</option>
+        <option value="2">Apenas LED</option>
+    </select>
+    <hr>
 
-    <h2>2. Controle e Persistência</h2>
+    <h2>2. Controle e Persistência</h2>
 
-    <button id="saveButton">SALVAR Configuração no Perfil Selecionado</button>
-    <button id="startButton">EXECUTAR Perfil Selecionado (LOAD)</button>
-    <button id="stopButton">PARAR Vibração</button>
+    <button id="saveButton">SALVAR Configuração no Perfil Selecionado</button>
+    <button id="startButton">EXECUTAR Perfil Selecionado (LOAD)</button>
+    <button id="stopButton">PARAR Vibração</button>
 
-    <p>Configuração Ativa: <strong><span id="valueSent">Nenhuma (Desconectado)</span></strong></p>
+    <p>Configuração Ativa: <strong><span id="valueSent">Nenhuma (Desconectado)</span></strong></p>
 
 </body>
 <script>
-    // ************************************************************
-    // 1. VARIÁVEIS E DOM
-    // ************************************************************
-    
-    // VARIÁVEIS BLE (UUIDS)
-    var deviceName ='ESP32'; 
-    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; 
-    var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; 
-    var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; 
-    var allProfilesCharacteristic = '19b10005-e8f2-537e-4f6c-d104768a1214'; // UUID para 35 bytes
+    // ************************************************************
+    // 1. VARIÁVEIS E DOM
+    // ************************************************************
+    
+    // VARIÁVEIS BLE (UUIDS)
+    var deviceName ='ESP32'; 
+    var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; 
+    var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; 
+    var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; 
+    var allProfilesCharacteristic = '19b10005-e8f2-537e-4f6c-d104768a1214'; // UUID para 35 bytes
 
-    // Variáveis DOM
-    const connectButton = document.getElementById('connectBleButton');
-    const disconnectButton = document.getElementById('disconnectBleButton');
-    const startButton = document.getElementById('startButton');
-    const stopButton = document.getElementById('stopButton');
-    const saveButton = document.getElementById('saveButton'); 
-    const durationInput = document.getElementById('durationInput');
-    const intensityInput = document.getElementById('intensityInput');
-    const intensityValue = document.getElementById('intensityValue');
-    const profileSelector = document.getElementById('profileSelector');
-    const actuatorSelector = document.getElementById('actuatorSelector'); 
-    const latestValueSent = document.getElementById('valueSent');
-    const bleStateContainer = document.getElementById('bleState');
-    const debugOutput = document.getElementById('debugOutput');
+    // Variáveis DOM
+    const connectButton = document.getElementById('connectBleButton');
+    const disconnectButton = document.getElementById('disconnectBleButton');
+    const startButton = document.getElementById('startButton');
+    const stopButton = document.getElementById('stopButton');
+    const saveButton = document.getElementById('saveButton'); 
+    const durationInput = document.getElementById('durationInput');
+    const intensityInput = document.getElementById('intensityInput');
+    const intensityValue = document.getElementById('intensityValue');
+    const profileSelector = document.getElementById('profileSelector');
+    const actuatorSelector = document.getElementById('actuatorSelector'); 
+    const latestValueSent = document.getElementById('valueSent');
+    const bleStateContainer = document.getElementById('bleState');
+    const debugOutput = document.getElementById('debugOutput');
 
-    // Variáveis Globais de Conexão
-    var bleServer;
-    var bleServiceFound;
-    var commandCharacteristicFound;
-    var sensorCharacteristicFound;
+    // Variáveis Globais de Conexão
+    var bleServer;
+    var bleServiceFound;
+    var commandCharacteristicFound;
+    var sensorCharacteristicFound;
 
-    // Array para armazenar os 5 perfis lidos do ESP32
-    let activeProfiles = []; 
+    // Array para armazenar os 5 perfis lidos do ESP32
+    let activeProfiles = []; 
 
-    // ************************************************************
-    // 2. LÓGICA DE PERFIS E MAPEAMENTO
-    // ************************************************************
-    
-    // Mapeia o valor de intensidade de 0-100 (usuário) para a faixa real (5-70)
-    function mapIntensity(userInput) {
-        userInput = Math.max(0, Math.min(100, userInput));
-        
-        const outputMin = 5;
-        const outputMax = 70; 
-        const inputMax = 100;
+    // ************************************************************
+    // 2. LÓGICA DE PERFIS E MAPEAMENTO
+    // ************************************************************
+    
+    // Mapeia o valor de intensidade de 0-100 (usuário) para a faixa real (5-70)
+    function mapIntensity(userInput) {
+        userInput = Math.max(0, Math.min(100, userInput));
+        
+        const outputMin = 5;
+        const outputMax = 70; 
+        const inputMax = 100;
 
-        const mappedValue = (userInput / inputMax) * (outputMax - outputMin) + outputMin;
-        
-        if (userInput === 0) return 0;
-        
-        return Math.round(mappedValue);
-    }
-    
-    // Adiciona uma linha ao log de debug visível
-    function logDebug(message) {
-        debugOutput.innerHTML += message + '\n';
-        console.log(message);
-    }
-    
-    // Função auxiliar para converter ArrayBuffer para string hexadecimal
-    function bufferToHex(buffer) {
-        return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join(' ');
-    }
+        const mappedValue = (userInput / inputMax) * (outputMax - outputMin) + outputMin;
+        
+        if (userInput === 0) return 0;
+        
+        return Math.round(mappedValue);
+    }
+    
+    // Adiciona uma linha ao log de debug visível
+    function logDebug(message) {
+        debugOutput.innerHTML += message + '\n';
+        console.log(message);
+    }
+    
+    // Função auxiliar para converter ArrayBuffer para string hexadecimal
+    function bufferToHex(buffer) {
+        return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join(' ');
+    }
 
-    // Carrega o perfil selecionado na interface
-    function loadSelectedProfile() {
-        const selectedId = parseInt(profileSelector.value);
-        
-        if (selectedId === 0 || activeProfiles.length === 0) {
-            return; 
-        }
-        
-        const profileIndex = selectedId - 1;
-        const profileData = activeProfiles[profileIndex];
+    // Carrega o perfil selecionado na interface
+    function loadSelectedProfile() {
+        const selectedId = parseInt(profileSelector.value);
+        
+        if (selectedId === 0 || activeProfiles.length === 0) {
+            return; 
+        }
+        
+        const profileIndex = selectedId - 1;
+        const profileData = activeProfiles[profileIndex];
 
-        if (profileData) {
-            durationInput.value = profileData.duration;
-            intensityInput.value = profileData.intensityUser; 
-            intensityValue.value = profileData.intensityUser + '%';
-            actuatorSelector.value = profileData.actuatorMode;
-            logDebug(`LOG: Perfil ${selectedId} carregado na interface. Duração: ${profileData.duration}`);
-        }
-    }
-    profileSelector.addEventListener('change', loadSelectedProfile);
-
-
-    // ************************************************************
-    // 3. EVENTOS DE CONTROLE E ENVIO
-    // ************************************************************
-
-    connectButton.addEventListener('click', (event) => {
-        if (isWebBluetoothEnabled()){
-            connectToDevice();
-        }
-    });
-    disconnectButton.addEventListener('click', disconnectDevice);
+        if (profileData) {
+            durationInput.value = profileData.duration;
+            intensityInput.value = profileData.intensityUser; 
+            intensityValue.value = profileData.intensityUser + '%';
+            actuatorSelector.value = profileData.actuatorMode;
+            logDebug(`LOG: Perfil ${selectedId} carregado na interface. Duração: ${profileData.duration}`);
+        }
+    }
+    profileSelector.addEventListener('change', loadSelectedProfile);
 
 
-    // Evento para SALVAR (Ação 2)
-    saveButton.addEventListener('click', () => {
-        const profileId = parseInt(profileSelector.value);
-        if (profileId === 0) {
-            alert("Selecione um Perfil (1-5) no seletor acima para SALVAR.");
-            return;
-        }
-        
-        const duration = parseInt(durationInput.value);
-        const intensity = parseInt(intensityInput.value);
-        const actuatorMode = parseInt(actuatorSelector.value); 
-        
-        if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
-            alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
-            return;
-        }
-        writeCommand(duration, intensity, 1 /*CMD ignorado*/, actuatorMode, profileId, 2 /*SAVE*/);
-    });
+    // ************************************************************
+    // 3. EVENTOS DE CONTROLE E ENVIO
+    // ************************************************************
 
-    // Evento para INICIAR/EXECUTAR (Ação 1)
-    startButton.addEventListener('click', () => {
-        const profileId = parseInt(profileSelector.value);
-        let duration = parseInt(durationInput.value);
-        let intensity = parseInt(intensityInput.value);
-        let actuatorMode = parseInt(actuatorSelector.value); 
-
-        if (profileId > 0) {
-            duration = 0; intensity = 0; actuatorMode = 0;
-        } else {
-             if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
-                alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
-                return;
-             }
-        }
-        writeCommand(duration, intensity, 1 /*START*/, actuatorMode, profileId, 1 /*RUN/LOAD*/);
-    });
-
-    // Evento para PARAR (Ação 1, Comando 2)
-    stopButton.addEventListener('click', () => {
-        writeCommand(0, 0, 2 /*STOP*/, 0, 0, 1 /*RUN/LOAD*/); 
-    });
+    connectButton.addEventListener('click', (event) => {
+        if (isWebBluetoothEnabled()){
+            connectToDevice();
+        }
+    });
+    disconnectButton.addEventListener('click', disconnectDevice);
 
 
-    // Função principal para enviar o pacote de 6 valores (string CSV)
-    function writeCommand(durationMs, intensity, command, actuatorMode, profileId, actionType){
-        if (commandCharacteristicFound && bleServer && bleServer.connected) {
-            
-            let intensityToSend = intensity;
+    // Evento para SALVAR (Ação 2)
+    saveButton.addEventListener('click', () => {
+        const profileId = parseInt(profileSelector.value);
+        if (profileId === 0) {
+            alert("Selecione um Perfil (1-5) no seletor acima para SALVAR.");
+            return;
+        }
+        
+        const duration = parseInt(durationInput.value);
+        const intensity = parseInt(intensityInput.value);
+        const actuatorMode = parseInt(actuatorSelector.value); 
+        
+        if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
+            alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
+            return;
+        }
+        writeCommand(duration, intensity, 1 /*CMD ignorado*/, actuatorMode, profileId, 2 /*SAVE*/);
+    });
 
-            if (actionType === 2 || (actionType === 1 && profileId === 0)) { 
-                intensityToSend = mapIntensity(intensity);
-            }
+    // Evento para INICIAR/EXECUTAR (Ação 1)
+    startButton.addEventListener('click', () => {
+        const profileId = parseInt(profileSelector.value);
+        let duration = parseInt(durationInput.value);
+        let intensity = parseInt(intensityInput.value);
+        let actuatorMode = parseInt(actuatorSelector.value); 
 
-            const dataString = `${durationMs},${intensityToSend},${command},${actuatorMode},${profileId},${actionType}`;
-            
-            return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
-            .then(() => {
-                logDebug(`COMANDO ENVIADO: ${dataString}`);
-                const actionDesc = actionType === 2 ? `SALVO (Perfil ${profileId})` : (command === 1 ? `EXECUTANDO (Perfil ${profileId > 0 ? profileId : 'Direto'})` : "PARADO");
-                
-                const sentText = `Ação: ${actionDesc}, Pacote Enviado: ${dataString}`;
-                latestValueSent.innerHTML = sentText;
-                latestValueSent.style.color = actionType === 2 ? '#ffc107' : (command === 1 ? '#007bff' : '#333');
-                
-                // Se salvamos, esperamos um pouco e lemos os perfis para atualizar a cache do JS
-                if (actionType === 2) {
-                    setTimeout(readAllProfiles, 500); // Espera 500ms para o ESP32 salvar na EEPROM
-                }
-            })
-            .catch(error => {
-                alert("Erro ao enviar comando. Reconecte: " + error.message);
-                console.error("Error writing to characteristic: ", error);
-            });
-        } else {
-            window.alert("Bluetooth is not connected. \n Conecte ao BLE primeiro!")
-        }
-    }
+        if (profileId > 0) {
+            duration = 0; intensity = 0; actuatorMode = 0;
+        } else {
+             if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
+                alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
+                return;
+             }
+        }
+        writeCommand(duration, intensity, 1 /*START*/, actuatorMode, profileId, 1 /*RUN/LOAD*/);
+    });
 
-
-    // ************************************************************
-    // 4. LEITURA DE PERFIS E STATUS
-    // ************************************************************
-
-    // NOVO: Função para ler todos os 5 perfis de uma vez (35 bytes)
-    function readAllProfiles() {
-        let pProfilesCharacteristic;
-        debugOutput.innerHTML = ''; // Limpa o debug ao iniciar a leitura
-        logDebug("INICIANDO LEITURA DE 35 BYTES...");
-
-        return bleServiceFound.getCharacteristic(allProfilesCharacteristic)
-        .then(charAllProfiles => {
-            pProfilesCharacteristic = charAllProfiles;
-            return pProfilesCharacteristic.readValue();
-        })
-        .then(value => {
-            if (value.byteLength === 35) {
-                const dataView = new DataView(value.buffer);
-                activeProfiles = [];
-                
-                // LOG HEX COMPLETO
-                logDebug(`SUCESSO: Pacote de 35 bytes recebido. HEX: ${bufferToHex(value.buffer)}`);
-
-                // Itera e desempacota cada perfil (7 bytes)
-                for (let i = 0; i < 5; i++) {
-                    const offset = i * 7;
-                    
-                    // CRÍTICO: VOLTAR para Little-Endian (true)
-                    const durationMs = dataView.getUint32(offset, true); // <<< CORREÇÃO DE ENDIANNESS (true)
-                    const intensityReal = dataView.getUint8(offset + 4); 
-                    const command = dataView.getUint8(offset + 5);      
-                    const actuatorMode = dataView.getUint8(offset + 6); 
-
-                    // LOG de debug crucial
-                    logDebug(`DEBUG: Perfil ${i+1}. Offset: ${offset}. Duração lida: ${durationMs}. Int Real: ${intensityReal}`); 
-
-                    // Inverte o mapeamento (5-70 para 0-100 do usuário)
-                    const outputMin = 5;
-                    const outputMax = 70; 
-                    let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
-                    
-                    if (intensityReal === 0) intensityUser = 0; 
-                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
-
-                    activeProfiles.push({
-                        id: i + 1,
-                        duration: durationMs,
-                        intensityUser: intensityUser,
-                        actuatorMode: actuatorMode
-                    });
-                }
-
-                // Seleciona o perfil que estava ativo ou o Perfil 1
-                const currentProfileId = profileSelector.value || "1";
-                profileSelector.value = currentProfileId;
-                loadSelectedProfile(); 
-                
-                logDebug("LOG: Todos os 5 perfis carregados e cache atualizada!");
-
-            } else {
-                logDebug(`ERROR: Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
-            }
-        })
-        .catch(error => {
-            logDebug(`ERROR: Falha ao ler todos os perfis na conexão: ${error.message}`);
-        });
-    }
-
-    // Leitura da Configuração Ativa (Status - 7 bytes)
-    function readActiveConfig() {
-        if (!sensorCharacteristicFound) return Promise.resolve();
-        
-        return sensorCharacteristicFound.readValue()
-            .then(value => {
-                if (value.byteLength >= 7) {
-                    const dataView = new DataView(value.buffer);
-                    
-                    const durationMs = dataView.getUint32(0, true); 
-                    const intensityReal = dataView.getUint8(4);
-                    const command = dataView.getUint8(5);
-                    const actuatorMode = dataView.getUint8(6);
-                    
-                    // Inverte o mapeamento
-                    const outputMin = 5;
-                    const outputMax = 70; 
-                    let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
-                    
-                    if (intensityReal === 0) intensityUser = 0; 
-                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
-
-                    // Atualiza o Status de Atividade
-                    const status = command === 1 ? "VIBRANDO" : "PARADO";
-                    const actuatorText = actuatorMode === 1 ? "Motor" : (actuatorMode === 2 ? "LED" : "Ambos");
-                    const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Atuador: ${actuatorText}`;
-                    latestValueSent.innerHTML = sentText;
-                    latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
-                }
-            })
-            .catch(error => {
-                console.error("Falha ao ler a característica de status:", error);
-                latestValueSent.innerHTML = "Falha na leitura inicial. Usando 0ms/0%.";
-            });
-    }
+    // Evento para PARAR (Ação 1, Comando 2)
+    stopButton.addEventListener('click', () => {
+        writeCommand(0, 0, 2 /*STOP*/, 0, 0, 1 /*RUN/LOAD*/); 
+    });
 
 
-    // ************************************************************
-    // 5. FUNÇÕES DE CONEXÃO BLE 
-    // ************************************************************
+    // Função principal para enviar o pacote de 6 valores (string CSV)
+    function writeCommand(durationMs, intensity, command, actuatorMode, profileId, actionType){
+        if (commandCharacteristicFound && bleServer && bleServer.connected) {
+            
+            let intensityToSend = intensity;
 
-    function connectToDevice(){
-        logDebug('INICIANDO CONEXÃO...');
-        
-        navigator.bluetooth.requestDevice({
-            filters: [{name: deviceName}],
-            optionalServices: [bleService]
-        })
-        .then(device => {
-            logDebug(`CONECTADO a ${device.name}.`);
-            bleStateContainer.innerHTML = 'Conectado a ' + device.name;
-            bleStateContainer.style.color = "#24af37";
-            device.addEventListener('gattservicedisconnected', onDisconnected);
-            return device.gatt.connect();
-        })
-        .then(gattServer =>{
-            logDebug("SERVIÇO GATT OBTIDO.");
-            bleServer = gattServer;
-            return bleServer.getPrimaryService(bleService);
-        })
-        .then(service => {
-            logDebug("CARACTERÍSTICAS OBTIDAS.");
-            bleServiceFound = service;
-            return bleServiceFound.getCharacteristic(commandCharacteristic); 
-        })
-        .then(charCommand => {
-            commandCharacteristicFound = charCommand;
-            return bleServiceFound.getCharacteristic(sensorCharacteristic); 
-        })
-        .then(charStatus => {
-            sensorCharacteristicFound = charStatus;
-            // 1. Tenta ler o status ativo (antigo)
-            return readActiveConfig(); 
-        })
-        .then(() => {
-            // 2. LÊ TODOS OS PERFIS APÓS CONEXÃO (CRÍTICO PARA ATUALIZAR INTERFACE)
-            return readAllProfiles(); 
-        })
-        .catch(error => {
-            logDebug(`ERROR: Erro de Conexão ou Serviço: ${error.message}`);
-            bleStateContainer.innerHTML = "Falha na Conexão";
-            bleStateContainer.style.color = "#dc3545";
-            console.error(error);
-        })
-    }
+            if (actionType === 2 || (actionType === 1 && profileId === 0)) { 
+                intensityToSend = mapIntensity(intensity);
+            }
 
-    function onDisconnected(event){
-        logDebug("DISPOSITIVO DESCONECTADO.");
-        bleStateContainer.innerHTML = "Dispositivo Desconectado";
-        latestValueSent.innerHTML = "Nenhuma (Desconectado)"; 
-        durationInput.value = 0; 
-        intensityInput.value = 0;
-        intensityValue.value = "0%";
-        bleStateContainer.style.color = "#dc3545";
-    }
+            const dataString = `${durationMs},${intensityToSend},${command},${actuatorMode},${profileId},${actionType}`;
+            
+            return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
+            .then(() => {
+                logDebug(`COMANDO ENVIADO: ${dataString}`);
+                const actionDesc = actionType === 2 ? `SALVO (Perfil ${profileId})` : (command === 1 ? `EXECUTANDO (Perfil ${profileId > 0 ? profileId : 'Direto'})` : "PARADO");
+                
+                const sentText = `Ação: ${actionDesc}, Pacote Enviado: ${dataString}`;
+                latestValueSent.innerHTML = sentText;
+                latestValueSent.style.color = actionType === 2 ? '#ffc107' : (command === 1 ? '#007bff' : '#333');
+                
+                // Se salvamos, esperamos um pouco e lemos os perfis para atualizar a cache do JS
+                if (actionType === 2) {
+                    setTimeout(readAllProfiles, 500); // Espera 500ms para o ESP32 salvar na EEPROM
+                }
+            })
+            .catch(error => {
+                alert("Erro ao enviar comando. Reconecte: " + error.message);
+                console.error("Error writing to characteristic: ", error);
+            });
+        } else {
+            window.alert("Bluetooth is not connected. \n Conecte ao BLE primeiro!")
+        }
+    }
 
-    function disconnectDevice() {
-        if (bleServer && bleServer.connected) {
-            bleServer.disconnect();
-        } else {
-            window.alert("Bluetooth já está desconectado.")
-        }
-    }
-    
-    function isWebBluetoothEnabled() {
-        if (!navigator.bluetooth) {
-            bleStateContainer.innerHTML = "Web Bluetooth API indisponível!";
-            return false
-        }
-        return true
-    }
+
+    // ************************************************************
+    // 4. LEITURA DE PERFIS E STATUS
+    // ************************************************************
+
+    // NOVO: Função para ler todos os 5 perfis de uma vez (35 bytes)
+    function readAllProfiles() {
+        let pProfilesCharacteristic;
+        debugOutput.innerHTML = ''; // Limpa o debug ao iniciar a leitura
+        logDebug("INICIANDO LEITURA DE 35 BYTES...");
+
+        return bleServiceFound.getCharacteristic(allProfilesCharacteristic)
+        .then(charAllProfiles => {
+            pProfilesCharacteristic = charAllProfiles;
+            return pProfilesCharacteristic.readValue();
+        })
+        .then(value => {
+            if (value.byteLength === 35) {
+                const dataView = new DataView(value.buffer);
+                activeProfiles = [];
+                
+                // LOG HEX COMPLETO
+                logDebug(`SUCESSO: Pacote de 35 bytes recebido. HEX: ${bufferToHex(value.buffer)}`);
+
+                // Itera e desempacota cada perfil (7 bytes)
+                for (let i = 0; i < 5; i++) {
+                    const offset = i * 7;
+                    
+                    // CRÍTICO: Tentativa de leitura Little-Endian (true)
+                    const durationMs = dataView.getUint32(offset, true); 
+                    const intensityReal = dataView.getUint8(offset + 4); 
+                    const command = dataView.getUint8(offset + 5);      
+                    const actuatorMode = dataView.getUint8(offset + 6); 
+
+                    // LOG de debug crucial
+                    logDebug(`DEBUG: Perfil ${i+1}. Offset: ${offset}. Duração lida: ${durationMs}. Int Real: ${intensityReal}`); 
+
+                    // Inverte o mapeamento (5-70 para 0-100 do usuário)
+                    const outputMin = 5;
+                    const outputMax = 70; 
+                    let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
+                    
+                    if (intensityReal === 0) intensityUser = 0; 
+                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
+
+                    activeProfiles.push({
+                        id: i + 1,
+                        duration: durationMs,
+                        intensityUser: intensityUser,
+                        actuatorMode: actuatorMode
+                    });
+                }
+
+                // Seleciona o perfil que estava ativo ou o Perfil 1
+                const currentProfileId = profileSelector.value || "1";
+                profileSelector.value = currentProfileId;
+                loadSelectedProfile(); 
+                
+                logDebug("LOG: Todos os 5 perfis carregados e cache atualizada!");
+
+            } else {
+                logDebug(`ERROR: Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
+            }
+        })
+        .catch(error => {
+            logDebug(`ERROR: Falha ao ler todos os perfis na conexão: ${error.message}`);
+        });
+    }
+
+    // Leitura da Configuração Ativa (Status - 7 bytes)
+    function readActiveConfig() {
+        if (!sensorCharacteristicFound) return Promise.resolve();
+        
+        return sensorCharacteristicFound.readValue()
+            .then(value => {
+                if (value.byteLength >= 7) {
+                    const dataView = new DataView(value.buffer);
+                    
+                    const durationMs = dataView.getUint32(0, true); 
+                    const intensityReal = dataView.getUint8(4);
+                    const command = dataView.getUint8(5);
+                    const actuatorMode = dataView.getUint8(6);
+                    
+                    // Inverte o mapeamento
+                    const outputMin = 5;
+                    const outputMax = 70; 
+                    let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
+                    
+                    if (intensityReal === 0) intensityUser = 0; 
+                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
+
+                    // Atualiza o Status de Atividade
+                    const status = command === 1 ? "VIBRANDO" : "PARADO";
+                    const actuatorText = actuatorMode === 1 ? "Motor" : (actuatorMode === 2 ? "LED" : "Ambos");
+                    const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Atuador: ${actuatorText}`;
+                    latestValueSent.innerHTML = sentText;
+                    latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
+                }
+            })
+            .catch(error => {
+                console.error("Falha ao ler a característica de status:", error);
+                latestValueSent.innerHTML = "Falha na leitura inicial. Usando 0ms/0%.";
+            });
+    }
+
+
+    // ************************************************************
+    // 5. FUNÇÕES DE CONEXÃO BLE 
+    // ************************************************************
+
+    function connectToDevice(){
+        logDebug('INICIANDO CONEXÃO...');
+        
+        navigator.bluetooth.requestDevice({
+            filters: [{name: deviceName}],
+            optionalServices: [bleService]
+        })
+        .then(device => {
+            logDebug(`CONECTADO a ${device.name}.`);
+            bleStateContainer.innerHTML = 'Conectado a ' + device.name;
+            bleStateContainer.style.color = "#24af37";
+            device.addEventListener('gattservicedisconnected', onDisconnected);
+            return device.gatt.connect();
+        })
+        .then(gattServer =>{
+            logDebug("SERVIÇO GATT OBTIDO.");
+            bleServer = gattServer;
+            return bleServer.getPrimaryService(bleService);
+        })
+        .then(service => {
+            logDebug("CARACTERÍSTICAS OBTIDAS.");
+            bleServiceFound = service;
+            return bleServiceFound.getCharacteristic(commandCharacteristic); 
+        })
+        .then(charCommand => {
+            commandCharacteristicFound = charCommand;
+            return bleServiceFound.getCharacteristic(sensorCharacteristic); 
+        })
+        .then(charStatus => {
+            sensorCharacteristicFound = charStatus;
+            // 1. Tenta ler o status ativo (antigo)
+            return readActiveConfig(); 
+        })
+        .then(() => {
+            // 2. LÊ TODOS OS PERFIS APÓS CONEXÃO (CRÍTICO PARA ATUALIZAR INTERFACE)
+            return readAllProfiles(); 
+        })
+        .catch(error => {
+            logDebug(`ERROR: Erro de Conexão ou Serviço: ${error.message}`);
+            bleStateContainer.innerHTML = "Falha na Conexão";
+            bleStateContainer.style.color = "#dc3545";
+            console.error(error);
+        })
+    }
+
+    function onDisconnected(event){
+        logDebug("DISPOSITIVO DESCONECTADO.");
+        bleStateContainer.innerHTML = "Dispositivo Desconectado";
+        latestValueSent.innerHTML = "Nenhuma (Desconectado)"; 
+        durationInput.value = 0; 
+        intensityInput.value = 0;
+        intensityValue.value = "0%";
+        bleStateContainer.style.color = "#dc3545";
+    }
+
+    function disconnectDevice() {
+        if (bleServer && bleServer.connected) {
+            bleServer.disconnect();
+        } else {
+            window.alert("Bluetooth já está desconectado.")
+        }
+    }
+    
+    function isWebBluetoothEnabled() {
+        if (!navigator.bluetooth) {
+            bleStateContainer.innerHTML = "Web Bluetooth API indisponível!";
+            return false
+        }
+        return true
+    }
 </script>
 </html>
