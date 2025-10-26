@@ -286,8 +286,8 @@
                 for (let i = 0; i < 5; i++) {
                     const offset = i * 7;
                     
-                    // CRÍTICO: MUDAR littleEndian de true para false para teste
-                    const durationMs = dataView.getUint32(offset, false); // <<< CORREÇÃO DE ENDIANNESS PARA TESTE
+                    // CRÍTICO: VOLTAR para Little-Endian (true)
+                    const durationMs = dataView.getUint32(offset, true); // <<< CORREÇÃO DE ENDIANNESS (true)
                     const intensityReal = dataView.getUint8(offset + 4); 
                     const command = dataView.getUint8(offset + 5);      
                     const actuatorMode = dataView.getUint8(offset + 6); 
