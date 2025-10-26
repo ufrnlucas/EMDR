@@ -106,7 +106,7 @@
     const actuatorSelector = document.getElementById('actuatorSelector'); 
     const latestValueSent = document.getElementById('valueSent');
     const bleStateContainer = document.getElementById('bleState');
-    const debugOutput = document.getElementById('debugOutput'); // <<< NOVO
+    const debugOutput = document.getElementById('debugOutput');
 
     // Variáveis Globais de Conexão
     var bleServer;
@@ -141,24 +141,26 @@
         debugOutput.innerHTML += message + '\n';
         console.log(message);
     }
+    
+    // Função auxiliar para converter ArrayBuffer para string hexadecimal
+    function bufferToHex(buffer) {
+        return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join(' ');
+    }
 
     // Carrega o perfil selecionado na interface
     function loadSelectedProfile() {
         const selectedId = parseInt(profileSelector.value);
         
-        // Se não for um perfil válido ou se os dados não foram lidos (activeProfiles vazio)
         if (selectedId === 0 || activeProfiles.length === 0) {
             return; 
         }
         
-        // O array é indexado de 0 a 4, entao id 1 -> index 0
         const profileIndex = selectedId - 1;
         const profileData = activeProfiles[profileIndex];
 
         if (profileData) {
-            // Preenche a interface com os dados do perfil lido
             durationInput.value = profileData.duration;
-            intensityInput.value = profileData.intensityUser; // Intensidade do usuario (0-100)
+            intensityInput.value = profileData.intensityUser; 
             intensityValue.value = profileData.intensityUser + '%';
             actuatorSelector.value = profileData.actuatorMode;
             logDebug(`LOG: Perfil ${selectedId} carregado na interface. Duração: ${profileData.duration}`);
@@ -195,7 +197,6 @@
             alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
             return;
         }
-        // Envia todos os valores + ID do perfil + AÇÃO DE SALVAR (2)
         writeCommand(duration, intensity, 1 /*CMD ignorado*/, actuatorMode, profileId, 2 /*SAVE*/);
     });
 
@@ -206,24 +207,19 @@
         let intensity = parseInt(intensityInput.value);
         let actuatorMode = parseInt(actuatorSelector.value); 
 
-        // Se um perfil for selecionado (> 0), o ESP32 CARREGA da EEPROM.
         if (profileId > 0) {
-            // Enviamos valores nulos, o ESP32 usa a configuração SALVA.
             duration = 0; intensity = 0; actuatorMode = 0;
         } else {
-             // Se Perfil for 0 (Configuração Direta), precisa ter valores válidos
              if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
                 alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
                 return;
              }
         }
-        // Ação: 1 (RUN/LOAD). Comando: 1 (START).
         writeCommand(duration, intensity, 1 /*START*/, actuatorMode, profileId, 1 /*RUN/LOAD*/);
     });
 
     // Evento para PARAR (Ação 1, Comando 2)
     stopButton.addEventListener('click', () => {
-        // Comando 2 (STOP). Ação 1 (RUN/LOAD), Perfil 0 (Ignorado)
         writeCommand(0, 0, 2 /*STOP*/, 0, 0, 1 /*RUN/LOAD*/); 
     });
 
@@ -234,26 +230,21 @@
             
             let intensityToSend = intensity;
 
-            // APLICA O MAPEAMENTO APENAS se estiver salvando (2) ou executando sem perfil (profileId=0)
             if (actionType === 2 || (actionType === 1 && profileId === 0)) { 
                 intensityToSend = mapIntensity(intensity);
             }
 
-            // 1. CONVERTE PARA STRING COM OS SEIS VALORES
             const dataString = `${durationMs},${intensityToSend},${command},${actuatorMode},${profileId},${actionType}`;
             
-            // Converte a string em ArrayBuffer para envio via BLE
             return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
                 logDebug(`COMANDO ENVIADO: ${dataString}`);
                 const actionDesc = actionType === 2 ? `SALVO (Perfil ${profileId})` : (command === 1 ? `EXECUTANDO (Perfil ${profileId > 0 ? profileId : 'Direto'})` : "PARADO");
                 
-                // Exibe o feedback
                 const sentText = `Ação: ${actionDesc}, Pacote Enviado: ${dataString}`;
                 latestValueSent.innerHTML = sentText;
                 latestValueSent.style.color = actionType === 2 ? '#ffc107' : (command === 1 ? '#007bff' : '#333');
                 
-                // Se salvamos, tentamos reler todos os perfis para atualizar a cache do JS
                 if (actionType === 2) {
                     readAllProfiles();
                 }
@@ -288,20 +279,21 @@
                 const dataView = new DataView(value.buffer);
                 activeProfiles = [];
                 
-                logDebug("SUCESSO: Recebido pacote de 35 bytes.");
+                // LOG HEX COMPLETO
+                logDebug(`SUCESSO: Pacote de 35 bytes recebido. HEX: ${bufferToHex(value.buffer)}`);
 
                 // Itera e desempacota cada perfil (7 bytes)
                 for (let i = 0; i < 5; i++) {
                     const offset = i * 7;
                     
-                    // Leitura do Perfil (7 bytes) - CRÍTICO: Little-endian (true)
-                    const durationMs = dataView.getUint32(offset, true); 
+                    // CRÍTICO: MUDAR littleEndian de true para false para teste
+                    const durationMs = dataView.getUint32(offset, false); // <<< CORREÇÃO DE ENDIANNESS PARA TESTE
                     const intensityReal = dataView.getUint8(offset + 4); 
                     const command = dataView.getUint8(offset + 5);      
                     const actuatorMode = dataView.getUint8(offset + 6); 
 
                     // LOG de debug crucial
-                    logDebug(`DEBUG: Perfil ${i+1} lido. Offset: ${offset}. Duração lida: ${durationMs}. Int Real: ${intensityReal}`); 
+                    logDebug(`DEBUG: Perfil ${i+1}. Offset: ${offset}. Duração lida: ${durationMs}. Int Real: ${intensityReal}`); 
 
                     // Inverte o mapeamento (5-70 para 0-100 do usuário)
                     const outputMin = 5;
@@ -319,7 +311,6 @@
                     });
                 }
 
-                // 3. Carrega o perfil 1 na interface e força a atualização
                 profileSelector.value = "1";
                 loadSelectedProfile(); 
                 
@@ -337,7 +328,7 @@
     // Leitura da Configuração Ativa (Status - 7 bytes)
     function readActiveConfig() {
         if (!sensorCharacteristicFound) return Promise.resolve();
-        // ... (Lógica de leitura de status de 7 bytes) ...
+        
         return sensorCharacteristicFound.readValue()
             .then(value => {
                 if (value.byteLength >= 7) {
