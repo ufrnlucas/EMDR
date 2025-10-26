@@ -11,7 +11,8 @@
         button { border: none; cursor: pointer; font-weight: bold; transition: background-color 0.3s; }
         #connectBleButton { background-color: #28a745; color: white; }
         #disconnectBleButton { background-color: #dc3545; color: white; }
-        #startButton { background-color: #ffc107; color: #333; font-size: 1.2em; }
+        #startButton { background-color: #007bff; color: white; font-size: 1.2em; }
+        #saveButton { background-color: #ffc107; color: #333; font-size: 1.2em; }
         #stopButton { background-color: #6c757d; color: white; font-size: 1.2em; }
         #bleState { font-size: 1.1em; }
         .note { font-size: 0.8em; color: #666; }
@@ -22,7 +23,7 @@
             body { max-width: 800px; margin: 20px auto; }
             input[type="number"], input[type="text"], select { width: 300px; display: inline-block; }
             #connectBleButton, #disconnectBleButton { width: auto; display: inline-block; }
-            #startButton, #stopButton { width: 48%; display: inline-block; }
+            #startButton, #stopButton, #saveButton { width: 32%; display: inline-block; }
             input[type="range"] { width: 280px; }
         }
     </style>
@@ -35,21 +36,22 @@
 
     <hr>
 
-    <h2>1. Configuração da Estimulação</h2>
+    <h2>1. Configuração e Seleção de Perfil</h2>
     
-    <label for="profileSelector">Selecione o Perfil a Configurar:</label>
+    <label for="profileSelector">Selecione o **Slot de Perfil** (1-5):</label>
     <select id="profileSelector">
-        <option value="">-- Selecione um Perfil --</option>
-        <option value="1" data-duration="1000" data-intensity="100">Perfil 1 (Padrão)</option>
-        <option value="2" data-duration="2000" data-intensity="80">Perfil 2 (Lento)</option>
-        <option value="3" data-duration="500" data-intensity="50">Perfil 3 (Rápido)</option>
-        <option value="4" data-duration="1500" data-intensity="30">Perfil 4 (Suave)</option>
-        <option value="5" data-duration="800" data-intensity="90">Perfil 5 (Forte)</option>
+        <option value="0">-- Configuração Direta (Não salva/carrega) --</option>
+        <option value="1">Perfil 1</option>
+        <option value="2">Perfil 2</option>
+        <option value="3">Perfil 3</option>
+        <option value="4">Perfil 4</option>
+        <option value="5">Perfil 5</option>
     </select>
-    <br><br>
+    <p class="note">A seleção de um perfil é para SALVAR ou CARREGAR a configuração da EEPROM.</p>
+    <br>
 
     <label for="durationInput">Duração de Vibração por Lado (ms):</label>
-    <input type="number" id="durationInput" min="100" max="10000" value="">
+    <input type="number" id="durationInput" min="100" max="10000" value="1000">
     <p class="note">Mín: 100ms, Máx: 10000ms (10s).</p>
     
     <label for="intensityInput">Intensidade (0-100%):</label>
@@ -66,9 +68,10 @@
     </select>
     <hr>
 
-    <h2>2. Controle e Início da Estimulação</h2>
+    <h2>2. Controle e Persistência</h2>
 
-    <button id="startButton">INICIAR Vibração Síncrona</button>
+    <button id="saveButton">SALVAR Configuração no Perfil Selecionado</button>
+    <button id="startButton">EXECUTAR Perfil Selecionado (LOAD)</button>
     <button id="stopButton">PARAR Vibração</button>
 
     <p>Configuração Ativa: <strong><span id="valueSent">Nenhuma (Desconectado)</span></strong></p>
@@ -79,17 +82,19 @@
     // 1. VARIÁVEIS E DOM
     // ************************************************************
     
-    // VARIÁVEIS BLE (UUIDS ORIGINAIS E NOME FUNCIONAL)
+    // VARIÁVEIS BLE (UUIDS)
     var deviceName ='ESP32'; 
     var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; 
     var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; 
     var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; 
+    var allProfilesCharacteristic = '19b10005-e8f2-537e-4f6c-d104768a1214'; // NOVO UUID para 35 bytes
 
     // Variáveis DOM
     const connectButton = document.getElementById('connectBleButton');
     const disconnectButton = document.getElementById('disconnectBleButton');
     const startButton = document.getElementById('startButton');
     const stopButton = document.getElementById('stopButton');
+    const saveButton = document.getElementById('saveButton'); 
     const durationInput = document.getElementById('durationInput');
     const intensityInput = document.getElementById('intensityInput');
     const intensityValue = document.getElementById('intensityValue');
@@ -104,46 +109,56 @@
     var commandCharacteristicFound;
     var sensorCharacteristicFound;
 
+    // NOVO: Array para armazenar os 5 perfis lidos do ESP32
+    let activeProfiles = []; 
 
     // ************************************************************
-    // 2. LÓGICA DE PERFIS
+    // 2. LÓGICA DE PERFIS E MAPEAMENTO
     // ************************************************************
-
-    function loadSelectedProfile() {
-        const selectedOption = profileSelector.options[profileSelector.selectedIndex];
-        
-        if (selectedOption.value) {
-            const duration = selectedOption.getAttribute('data-duration');
-            const intensity = selectedOption.getAttribute('data-intensity');
-
-            durationInput.value = duration;
-            intensityInput.value = intensity;
-            intensityValue.value = intensity + '%';
-        }
-    }
-    profileSelector.addEventListener('change', loadSelectedProfile);
-
-    // ************************************************************
-    // 3. MAPEAMENTO E EVENTOS DE CONTROLE
-    // ************************************************************
-
-    // Mapeia o valor de intensidade de 0-100 para a NOVA faixa segura de 5-70 (real)
+    
+    // Mapeia o valor de intensidade de 0-100 (usuário) para a faixa real (5-70) do ESP32/DRV2605
     function mapIntensity(userInput) {
         userInput = Math.max(0, Math.min(100, userInput));
         
         const outputMin = 5;
-        const outputMax = 55; // NOVO LIMITE MÁXIMO
+        const outputMax = 70; 
         const inputMax = 100;
 
-        // Fórmula: (x / B) * (D - C) + C
         const mappedValue = (userInput / inputMax) * (outputMax - outputMin) + outputMin;
         
-        // O comando 0 (PARAR) deve sempre enviar Intensidade 0.
         if (userInput === 0) return 0;
         
         return Math.round(mappedValue);
     }
+    
+    // Carrega o perfil selecionado na interface
+    function loadSelectedProfile() {
+        const selectedId = parseInt(profileSelector.value);
+        
+        // Se não for um perfil válido ou se os dados não foram lidos
+        if (selectedId === 0 || activeProfiles.length === 0) {
+            return; 
+        }
+        
+        // O array é indexado de 0 a 4, entao id 1 -> index 0
+        const profileIndex = selectedId - 1;
+        const profileData = activeProfiles[profileIndex];
 
+        if (profileData) {
+            // Preenche a interface com os dados do perfil lido
+            durationInput.value = profileData.duration;
+            intensityInput.value = profileData.intensityUser; // Intensidade do usuario (0-100)
+            intensityValue.value = profileData.intensityUser + '%';
+            actuatorSelector.value = profileData.actuatorMode;
+            console.log(`Perfil ${selectedId} carregado na interface.`);
+        }
+    }
+    profileSelector.addEventListener('change', loadSelectedProfile);
+
+
+    // ************************************************************
+    // 3. EVENTOS DE CONTROLE
+    // ************************************************************
 
     connectButton.addEventListener('click', (event) => {
         if (isWebBluetoothEnabled()){
@@ -152,7 +167,15 @@
     });
     disconnectButton.addEventListener('click', disconnectDevice);
 
-    startButton.addEventListener('click', () => {
+
+    // Evento para SALVAR (Ação 2)
+    saveButton.addEventListener('click', () => {
+        const profileId = parseInt(profileSelector.value);
+        if (profileId === 0) {
+            alert("Selecione um Perfil (1-5) no seletor acima para SALVAR.");
+            return;
+        }
+        
         const duration = parseInt(durationInput.value);
         const intensity = parseInt(intensityInput.value);
         const actuatorMode = parseInt(actuatorSelector.value); 
@@ -161,37 +184,63 @@
             alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
             return;
         }
-        writeConfigCharacteristic(duration, intensity, 1, actuatorMode);
+        // Envia todos os valores + ID do perfil + AÇÃO DE SALVAR (2)
+        writeCommand(duration, intensity, 1 /*CMD ignorado*/, actuatorMode, profileId, 2 /*SAVE*/);
     });
 
+    // Evento para INICIAR/EXECUTAR (Ação 1)
+    startButton.addEventListener('click', () => {
+        const profileId = parseInt(profileSelector.value);
+        let duration = parseInt(durationInput.value);
+        let intensity = parseInt(intensityInput.value);
+        let actuatorMode = parseInt(actuatorSelector.value); 
+
+        // Se um perfil for selecionado (> 0), o ESP32 CARREGA da EEPROM.
+        if (profileId > 0) {
+            // Enviamos valores nulos, o ESP32 usa a configuração SALVA.
+            duration = 0; intensity = 0; actuatorMode = 0;
+        } else {
+             // Se Perfil for 0 (Configuração Direta), precisa ter valores válidos
+             if (isNaN(duration) || isNaN(intensity) || isNaN(actuatorMode) || !bleServer || !bleServer.connected) {
+                alert("Verifique os valores de Duração, Intensidade, Atuador e a Conexão BLE.");
+                return;
+             }
+        }
+        // Ação: 1 (RUN/LOAD). Comando: 1 (START).
+        writeCommand(duration, intensity, 1 /*START*/, actuatorMode, profileId, 1 /*RUN/LOAD*/);
+    });
+
+    // Evento para PARAR (Ação 1, Comando 2)
     stopButton.addEventListener('click', () => {
-        writeConfigCharacteristic(0, 0, 0, 0); 
+        // Comando 2 (STOP). Ação 1 (RUN/LOAD), Perfil 0 (Ignorado)
+        writeCommand(0, 0, 2 /*STOP*/, 0, 0, 1 /*RUN/LOAD*/); 
     });
 
 
-    // Função para enviar o comando como string (CSV: "Duração,IntensidadeReal,Comando,ModoAtuador")
-    function writeConfigCharacteristic(durationMs, intensity, command, actuatorMode){
+    // Função principal para enviar o pacote de 6 valores (string CSV)
+    // CSV: "Dur,IntReal,Cmd,Modo,ID_Perfil,Acao"
+    function writeCommand(durationMs, intensity, command, actuatorMode, profileId, actionType){
         if (commandCharacteristicFound && bleServer && bleServer.connected) {
             
             let intensityToSend = intensity;
 
-            // APLICA O MAPEAMENTO APENAS NO MODO INICIAR
-            if (command === 1) {
+            // APLICA O MAPEAMENTO APENAS se estiver salvando (2) ou executando sem perfil (profileId=0)
+            if (actionType === 2 || (actionType === 1 && profileId === 0)) { 
                 intensityToSend = mapIntensity(intensity);
             }
-            
-            // 1. CONVERTE PARA STRING COM O QUARTO VALOR (Modo Atuador)
-            const dataString = `${durationMs},${intensityToSend},${command},${actuatorMode}`;
+
+            // 1. CONVERTE PARA STRING COM OS SEIS VALORES
+            const dataString = `${durationMs},${intensityToSend},${command},${actuatorMode},${profileId},${actionType}`;
             
             // Converte a string em ArrayBuffer para envio via BLE
             return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
-                const status = command === 1 ? "INICIADO" : "PARADO";
-                const actuatorText = actuatorMode === 1 ? "Motor" : (actuatorMode === 2 ? "LED" : "Ambos");
+                const actionDesc = actionType === 2 ? `SALVO (Perfil ${profileId})` : (command === 1 ? `EXECUTANDO (Perfil ${profileId > 0 ? profileId : 'Direto'})` : "PARADO");
+                
                 // Exibe o feedback
-                const sentText = `Status: ${status}, Duração: ${durationMs}ms, Int. Usuário: ${intensity}%, Atuador: ${actuatorText}`;
+                const sentText = `Ação: ${actionDesc}, Pacote Enviado: ${dataString}`;
                 latestValueSent.innerHTML = sentText;
-                latestValueSent.style.color = command === 1 ? '#007bff' : '#333';
+                latestValueSent.style.color = actionType === 2 ? '#ffc107' : (command === 1 ? '#007bff' : '#333');
             })
             .catch(error => {
                 alert("Erro ao enviar comando. Reconecte: " + error.message);
@@ -202,14 +251,70 @@
         }
     }
 
+
     // ************************************************************
-    // 4. LEITURA DE FEEDBACK NA CONEXÃO 
+    // 4. LEITURA DE PERFIS E STATUS
     // ************************************************************
 
+    // NOVO: Função para ler todos os 5 perfis de uma vez (35 bytes)
+    function readAllProfiles() {
+        let pProfilesCharacteristic;
+        
+        return bleServiceFound.getCharacteristic(allProfilesCharacteristic)
+        .then(charAllProfiles => {
+            pProfilesCharacteristic = charAllProfiles;
+            return pProfilesCharacteristic.readValue();
+        })
+        .then(value => {
+            if (value.byteLength === 35) {
+                const dataView = new DataView(value.buffer);
+                activeProfiles = [];
+                
+                // Cada perfil tem 7 bytes
+                for (let i = 0; i < 5; i++) {
+                    const offset = i * 7;
+                    
+                    // Leitura do Perfil (7 bytes) - Little-endian (true)
+                    const durationMs = dataView.getUint32(offset, true); 
+                    const intensityReal = dataView.getUint8(offset + 4); 
+                    const command = dataView.getUint8(offset + 5);      
+                    const actuatorMode = dataView.getUint8(offset + 6); 
+
+                    // Inverte o mapeamento (5-70 para 0-100 do usuário)
+                    const outputMin = 5;
+                    const outputMax = 70; 
+                    let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
+                    
+                    if (intensityReal === 0) intensityUser = 0; 
+                    if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
+
+                    activeProfiles.push({
+                        id: i + 1,
+                        duration: durationMs,
+                        intensityUser: intensityUser,
+                        actuatorMode: actuatorMode
+                    });
+                }
+
+                // 3. Carrega o primeiro perfil (Slot 1) na interface por padrão
+                profileSelector.value = "1";
+                loadSelectedProfile(); 
+                
+                console.log("Todos os 5 perfis carregados com sucesso!");
+
+            } else {
+                console.error(`Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
+            }
+        })
+        .catch(error => {
+            console.error("Falha ao ler todos os perfis na conexão:", error);
+        });
+    }
+
+    // Leitura da Configuração Ativa (Status - 7 bytes)
     function readActiveConfig() {
         if (!sensorCharacteristicFound) return Promise.resolve();
 
-        // Espera-se ler 7 bytes (Duração 4, Int 1, Cmd 1, ModoAtuador 1)
         return sensorCharacteristicFound.readValue()
             .then(value => {
                 if (value.byteLength >= 7) {
@@ -220,21 +325,15 @@
                     const command = dataView.getUint8(5);
                     const actuatorMode = dataView.getUint8(6);
                     
-                    // Inverte o mapeamento (CRÍTICO: Inverter o mapeamento para 5-70)
+                    // Inverte o mapeamento
                     const outputMin = 5;
                     const outputMax = 70; 
-
                     let intensityUser = Math.round(((intensityReal - outputMin) / (outputMax - outputMin)) * 100);
+                    
                     if (intensityReal === 0) intensityUser = 0; 
                     if (intensityUser < 0 || intensityUser > 100) intensityUser = 100; 
 
-                    // 1. Atualiza os inputs do Site
-                    durationInput.value = durationMs;
-                    intensityInput.value = intensityUser;
-                    intensityValue.value = intensityUser + '%';
-                    actuatorSelector.value = actuatorMode;
-                    
-                    // 2. Atualiza o Status de Atividade
+                    // Atualiza o Status de Atividade
                     const status = command === 1 ? "VIBRANDO" : "PARADO";
                     const actuatorText = actuatorMode === 1 ? "Motor" : (actuatorMode === 2 ? "LED" : "Ambos");
                     const sentText = `Lido do ESP32 (Ativo): Status: ${status}, Duração: ${durationMs}ms, Atuador: ${actuatorText}`;
@@ -248,8 +347,9 @@
             });
     }
 
+
     // ************************************************************
-    // 5. FUNÇÕES DE CONEXÃO BLE (Mantidas)
+    // 5. FUNÇÕES DE CONEXÃO BLE (Atualizada para chamar readAllProfiles)
     // ************************************************************
 
     function connectToDevice(){
@@ -277,7 +377,12 @@
         })
         .then(charStatus => {
             sensorCharacteristicFound = charStatus;
-            return readActiveConfig();
+            // 1. Tenta ler o status ativo (antigo)
+            return readActiveConfig(); 
+        })
+        .then(() => {
+            // 2. LÊ TODOS OS PERFIS APÓS CONEXÃO
+            return readAllProfiles(); 
         })
         .catch(error => {
             alert("Erro de Conexão ou Serviço. Verifique o console: " + error.message);

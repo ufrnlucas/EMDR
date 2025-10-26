@@ -15,6 +15,7 @@ void setup() {
     
     setup_motor_led(); // Inicializa LED e Motor
     init_ble_server(); // Inicializa o Servidor BLE
+    init_profile_manager(); // Inicializa a EEPROM (necessário para salvar/carregar)
 }
 
 

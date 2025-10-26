@@ -1,11 +1,13 @@
-// Arquivo: emdr_logic.h
+// Arquivo: emdr_logic.h (Versão Limpa)
 
 #pragma once
-#include "emdr_config.h"
-#include "motor_control.h"
+
+#include "global_vars.h"     // <<< NOVO: Para acessar currentConfig, pStatusCharacteristic, etc.
+#include "motor_control.h"   // Para stopStimulation e outras chamadas de motor
+#include "profile_manager.h" // Para a struct EmdrCommandFromApp_t
 
 // Funções expostas
 void updateStatusCharacteristic();
 void stopStimulation();
-void handleCommand(EmdrConfigData_t config);
+void handleCommand(EmdrCommandFromApp_t command);
 void run_emdr_cycle(); // Chamada no loop()

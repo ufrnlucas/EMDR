@@ -1,7 +1,8 @@
-// Arquivo: ble_server.h
+// Arquivo: ble_server.h (Versão Limpa)
 
 #pragma once
-#include "emdr_config.h"
-#include "emdr_logic.h" // Necessário para chamar handleCommand
+
+#include "global_vars.h" // <<< NOVO: Contém todas as declarações 'extern' do BLE
+#include "emdr_logic.h"  // Necessário para a assinatura de handleCommand
 
 void init_ble_server();
