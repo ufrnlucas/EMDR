@@ -34,6 +34,10 @@
     <button id="disconnectBleButton">Desconectar</button>
     <p>Status BLE: <strong><span id="bleState" style="color:#dc3545;">Desconectado</span></strong></p>
 
+    <div id="debugContainer" style="border: 1px solid #ccc; padding: 10px; margin-top: 20px; background-color: #fff3cd;">
+        <h3 style="margin-top: 0; color: #856404;">Monitor de Debug BLE</h3>
+        <pre id="debugOutput" style="white-space: pre-wrap; word-break: break-all; font-size: 0.8em; color: #000;"></pre>
+    </div>
     <hr>
 
     <h2>1. Configuração e Seleção de Perfil</h2>
@@ -102,7 +106,8 @@
     const actuatorSelector = document.getElementById('actuatorSelector'); 
     const latestValueSent = document.getElementById('valueSent');
     const bleStateContainer = document.getElementById('bleState');
-    
+    const debugOutput = document.getElementById('debugOutput'); // <<< NOVO
+
     // Variáveis Globais de Conexão
     var bleServer;
     var bleServiceFound;
@@ -131,6 +136,12 @@
         return Math.round(mappedValue);
     }
     
+    // Adiciona uma linha ao log de debug visível
+    function logDebug(message) {
+        debugOutput.innerHTML += message + '\n';
+        console.log(message);
+    }
+
     // Carrega o perfil selecionado na interface
     function loadSelectedProfile() {
         const selectedId = parseInt(profileSelector.value);
@@ -150,7 +161,7 @@
             intensityInput.value = profileData.intensityUser; // Intensidade do usuario (0-100)
             intensityValue.value = profileData.intensityUser + '%';
             actuatorSelector.value = profileData.actuatorMode;
-            console.log(`LOG: Perfil ${selectedId} carregado na interface.`);
+            logDebug(`LOG: Perfil ${selectedId} carregado na interface. Duração: ${profileData.duration}`);
         }
     }
     profileSelector.addEventListener('change', loadSelectedProfile);
@@ -218,7 +229,6 @@
 
 
     // Função principal para enviar o pacote de 6 valores (string CSV)
-    // CSV: "Dur,IntReal,Cmd,Modo,ID_Perfil,Acao"
     function writeCommand(durationMs, intensity, command, actuatorMode, profileId, actionType){
         if (commandCharacteristicFound && bleServer && bleServer.connected) {
             
@@ -235,6 +245,7 @@
             // Converte a string em ArrayBuffer para envio via BLE
             return commandCharacteristicFound.writeValue(new TextEncoder().encode(dataString))
             .then(() => {
+                logDebug(`COMANDO ENVIADO: ${dataString}`);
                 const actionDesc = actionType === 2 ? `SALVO (Perfil ${profileId})` : (command === 1 ? `EXECUTANDO (Perfil ${profileId > 0 ? profileId : 'Direto'})` : "PARADO");
                 
                 // Exibe o feedback
@@ -264,7 +275,9 @@
     // NOVO: Função para ler todos os 5 perfis de uma vez (35 bytes)
     function readAllProfiles() {
         let pProfilesCharacteristic;
-        
+        debugOutput.innerHTML = ''; // Limpa o debug ao iniciar a leitura
+        logDebug("INICIANDO LEITURA DE 35 BYTES...");
+
         return bleServiceFound.getCharacteristic(allProfilesCharacteristic)
         .then(charAllProfiles => {
             pProfilesCharacteristic = charAllProfiles;
@@ -275,7 +288,7 @@
                 const dataView = new DataView(value.buffer);
                 activeProfiles = [];
                 
-                console.log("DEBUG: Recebido pacote de 35 bytes.");
+                logDebug("SUCESSO: Recebido pacote de 35 bytes.");
 
                 // Itera e desempacota cada perfil (7 bytes)
                 for (let i = 0; i < 5; i++) {
@@ -288,7 +301,7 @@
                     const actuatorMode = dataView.getUint8(offset + 6); 
 
                     // LOG de debug crucial
-                    console.log(`DEBUG: Perfil ${i+1} lido. Offset: ${offset}. Duração lida: ${durationMs}.`); 
+                    logDebug(`DEBUG: Perfil ${i+1} lido. Offset: ${offset}. Duração lida: ${durationMs}. Int Real: ${intensityReal}`); 
 
                     // Inverte o mapeamento (5-70 para 0-100 do usuário)
                     const outputMin = 5;
@@ -310,14 +323,14 @@
                 profileSelector.value = "1";
                 loadSelectedProfile(); 
                 
-                console.log("LOG: Todos os 5 perfis carregados e cache atualizada!");
+                logDebug("LOG: Todos os 5 perfis carregados e cache atualizada!");
 
             } else {
-                console.error(`ERROR: Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
+                logDebug(`ERROR: Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
             }
         })
         .catch(error => {
-            console.error("ERROR: Falha ao ler todos os perfis na conexão:", error);
+            logDebug(`ERROR: Falha ao ler todos os perfis na conexão: ${error.message}`);
         });
     }
 
@@ -363,21 +376,26 @@
     // ************************************************************
 
     function connectToDevice(){
+        logDebug('INICIANDO CONEXÃO...');
+        
         navigator.bluetooth.requestDevice({
             filters: [{name: deviceName}],
             optionalServices: [bleService]
         })
         .then(device => {
+            logDebug(`CONECTADO a ${device.name}.`);
             bleStateContainer.innerHTML = 'Conectado a ' + device.name;
             bleStateContainer.style.color = "#24af37";
             device.addEventListener('gattservicedisconnected', onDisconnected);
             return device.gatt.connect();
         })
         .then(gattServer =>{
+            logDebug("SERVIÇO GATT OBTIDO.");
             bleServer = gattServer;
             return bleServer.getPrimaryService(bleService);
         })
         .then(service => {
+            logDebug("CARACTERÍSTICAS OBTIDAS.");
             bleServiceFound = service;
             return bleServiceFound.getCharacteristic(commandCharacteristic); 
         })
@@ -395,7 +413,7 @@
             return readAllProfiles(); 
         })
         .catch(error => {
-            alert("Erro de Conexão ou Serviço. Verifique o console: " + error.message);
+            logDebug(`ERROR: Erro de Conexão ou Serviço: ${error.message}`);
             bleStateContainer.innerHTML = "Falha na Conexão";
             bleStateContainer.style.color = "#dc3545";
             console.error(error);
@@ -403,6 +421,7 @@
     }
 
     function onDisconnected(event){
+        logDebug("DISPOSITIVO DESCONECTADO.");
         bleStateContainer.innerHTML = "Dispositivo Desconectado";
         latestValueSent.innerHTML = "Nenhuma (Desconectado)"; 
         durationInput.value = 0; 
