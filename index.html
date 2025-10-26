@@ -87,7 +87,7 @@
     var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; 
     var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; 
     var sensorCharacteristic= '19b10001-e8f2-537e-4f6c-d104768a1214'; 
-    var allProfilesCharacteristic = '19b10005-e8f2-537e-4f6c-d104768a1214'; // NOVO UUID para 35 bytes
+    var allProfilesCharacteristic = '19b10005-e8f2-537e-4f6c-d104768a1214'; // UUID para 35 bytes
 
     // Variáveis DOM
     const connectButton = document.getElementById('connectBleButton');
@@ -109,14 +109,14 @@
     var commandCharacteristicFound;
     var sensorCharacteristicFound;
 
-    // NOVO: Array para armazenar os 5 perfis lidos do ESP32
+    // Array para armazenar os 5 perfis lidos do ESP32
     let activeProfiles = []; 
 
     // ************************************************************
     // 2. LÓGICA DE PERFIS E MAPEAMENTO
     // ************************************************************
     
-    // Mapeia o valor de intensidade de 0-100 (usuário) para a faixa real (5-70) do ESP32/DRV2605
+    // Mapeia o valor de intensidade de 0-100 (usuário) para a faixa real (5-70)
     function mapIntensity(userInput) {
         userInput = Math.max(0, Math.min(100, userInput));
         
@@ -135,7 +135,7 @@
     function loadSelectedProfile() {
         const selectedId = parseInt(profileSelector.value);
         
-        // Se não for um perfil válido ou se os dados não foram lidos
+        // Se não for um perfil válido ou se os dados não foram lidos (activeProfiles vazio)
         if (selectedId === 0 || activeProfiles.length === 0) {
             return; 
         }
@@ -150,14 +150,14 @@
             intensityInput.value = profileData.intensityUser; // Intensidade do usuario (0-100)
             intensityValue.value = profileData.intensityUser + '%';
             actuatorSelector.value = profileData.actuatorMode;
-            console.log(`Perfil ${selectedId} carregado na interface.`);
+            console.log(`LOG: Perfil ${selectedId} carregado na interface.`);
         }
     }
     profileSelector.addEventListener('change', loadSelectedProfile);
 
 
     // ************************************************************
-    // 3. EVENTOS DE CONTROLE
+    // 3. EVENTOS DE CONTROLE E ENVIO
     // ************************************************************
 
     connectButton.addEventListener('click', (event) => {
@@ -241,6 +241,11 @@
                 const sentText = `Ação: ${actionDesc}, Pacote Enviado: ${dataString}`;
                 latestValueSent.innerHTML = sentText;
                 latestValueSent.style.color = actionType === 2 ? '#ffc107' : (command === 1 ? '#007bff' : '#333');
+                
+                // Se salvamos, tentamos reler todos os perfis para atualizar a cache do JS
+                if (actionType === 2) {
+                    readAllProfiles();
+                }
             })
             .catch(error => {
                 alert("Erro ao enviar comando. Reconecte: " + error.message);
@@ -270,15 +275,20 @@
                 const dataView = new DataView(value.buffer);
                 activeProfiles = [];
                 
-                // Cada perfil tem 7 bytes
+                console.log("DEBUG: Recebido pacote de 35 bytes.");
+
+                // Itera e desempacota cada perfil (7 bytes)
                 for (let i = 0; i < 5; i++) {
                     const offset = i * 7;
                     
-                    // Leitura do Perfil (7 bytes) - Little-endian (true)
+                    // Leitura do Perfil (7 bytes) - CRÍTICO: Little-endian (true)
                     const durationMs = dataView.getUint32(offset, true); 
                     const intensityReal = dataView.getUint8(offset + 4); 
                     const command = dataView.getUint8(offset + 5);      
                     const actuatorMode = dataView.getUint8(offset + 6); 
+
+                    // LOG de debug crucial
+                    console.log(`DEBUG: Perfil ${i+1} lido. Offset: ${offset}. Duração lida: ${durationMs}.`); 
 
                     // Inverte o mapeamento (5-70 para 0-100 do usuário)
                     const outputMin = 5;
@@ -296,25 +306,25 @@
                     });
                 }
 
-                // 3. Carrega o primeiro perfil (Slot 1) na interface por padrão
+                // 3. Carrega o perfil 1 na interface e força a atualização
                 profileSelector.value = "1";
                 loadSelectedProfile(); 
                 
-                console.log("Todos os 5 perfis carregados com sucesso!");
+                console.log("LOG: Todos os 5 perfis carregados e cache atualizada!");
 
             } else {
-                console.error(`Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
+                console.error(`ERROR: Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
             }
         })
         .catch(error => {
-            console.error("Falha ao ler todos os perfis na conexão:", error);
+            console.error("ERROR: Falha ao ler todos os perfis na conexão:", error);
         });
     }
 
     // Leitura da Configuração Ativa (Status - 7 bytes)
     function readActiveConfig() {
         if (!sensorCharacteristicFound) return Promise.resolve();
-
+        // ... (Lógica de leitura de status de 7 bytes) ...
         return sensorCharacteristicFound.readValue()
             .then(value => {
                 if (value.byteLength >= 7) {
@@ -349,7 +359,7 @@
 
 
     // ************************************************************
-    // 5. FUNÇÕES DE CONEXÃO BLE (Atualizada para chamar readAllProfiles)
+    // 5. FUNÇÕES DE CONEXÃO BLE 
     // ************************************************************
 
     function connectToDevice(){
@@ -381,7 +391,7 @@
             return readActiveConfig(); 
         })
         .then(() => {
-            // 2. LÊ TODOS OS PERFIS APÓS CONEXÃO
+            // 2. LÊ TODOS OS PERFIS APÓS CONEXÃO (CRÍTICO PARA ATUALIZAR INTERFACE)
             return readAllProfiles(); 
         })
         .catch(error => {
