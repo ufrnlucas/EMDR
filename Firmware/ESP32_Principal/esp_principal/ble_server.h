@@ -4,6 +4,7 @@
 
 #include "global_vars.h" // <<< NOVO: Contém todas as declarações 'extern' do BLE
 #include "emdr_logic.h"  // Necessário para a assinatura de handleCommand
+#include "profile_manager.h" // Necessário para a assinatura de loadAllProfiles
 
 void init_ble_server();
 // NOVO: Declaração da função utilitária de debug HEX

@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Dispositivo EMDR - Web BLE App</title>
+    <title>1Dispositivo EMDR - Web BLE App1</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* Estilos Responsivos */
+        /* Estilos Omitidos para concisão */
         body { font-family: Arial, sans-serif; margin: 10px; background-color: #f4f4f9; color: #333; }
         h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 15px; }
         input[type="number"], select, button { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 5px; }
@@ -86,7 +86,7 @@
     // 1. VARIÁVEIS E DOM
     // ************************************************************
     
-    // VARIÁVEIS BLE (UUIDS)
+    // VARIÁVEIS BLE (UUIDS) - Compatível com ble_uuids.h
     var deviceName ='ESP32'; 
     var bleService = '19b10000-e8f2-537e-4f6c-d104768a1214'; 
     var commandCharacteristic = '19b10002-e8f2-537e-4f6c-d104768a1214'; 
@@ -302,7 +302,7 @@
                     const byte3 = dataView.getUint8(offset + 3);
 
                     // Cálculo Little-Endian: B0 + B1*256 + B2*65536 + B3*16777216
-                    // Nota: o JS interpreta isso como float para números grandes, mas deve funcionar para 500/5000ms.
+                    // Esta versão é a mais robusta para uint32 em JS.
                     const durationMs = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216);
                     // --- FIM: LEITURA MANUAL LITTLE-ENDIAN ---
 
@@ -342,7 +342,7 @@
             }
         
         } catch (error) {
-            // **ISTO VAI MOSTRAR POR QUE O READ ESTÁ FALHANDO!**
+            // ISTO VAI MOSTRAR POR QUE O READ ESTÁ FALHANDO NO NAVEGADOR
             logDebug(`ERROR: Falha CRÍTICA ao ler todos os perfis: ${error.message}`);
             console.error("Critical Read Failure:", error);
         }

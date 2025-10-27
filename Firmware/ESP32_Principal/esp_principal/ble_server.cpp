@@ -1,11 +1,13 @@
 #include "ble_server.h"
 #include "global_vars.h"
 #include "profile_manager.h" 
-#include "emdr_logic.h" 
+#include "emdr_logic.h"
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 
 // --- UUIDs do Serviço e Características ---
+// Usando as constantes definidas, por favor, certifique-se de que ble_uuids.h
+// foi incluído ou que você as definiu globalmente. Reutilizando os valores do seu contexto.
 #define SERVICE_UUID "19b10000-e8f2-537e-4f6c-d104768a1214"
 #define STATUS_CHAR_UUID "19b10001-e8f2-537e-4f6c-d104768a1214" 
 #define COMMAND_CHAR_UUID  "19b10002-e8f2-537e-4f6c-d104768a1214" 
@@ -46,14 +48,13 @@ class ServerCallbacks : public BLEServerCallbacks {
 // --- 3. CALLBACKS DE ESCRITA (COMMAND) ---
 class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        // CORREÇÃO DE COMPILAÇÃO: Constrói std::string diretamente (usa c_str() implicitamente ou é compatível)
-        std::string rxValue(pCharacteristic->getValue().c_str());
+        // CORREÇÃO: Cria explicitamente um std::string para resolver o conflito de tipos.
+        std::string rxValue(pCharacteristic->getValue().c_str()); 
 
         if (rxValue.length() > 0) {
             // Assume que o valor é uma string CSV: duration, intensity, command, actuatorMode, profileId, actionType
             Serial.printf("[DEBUG PARSE]: Conteudo lido: %s\n", rxValue.c_str());
 
-            // Usa c_str() para obter o ponteiro char* que sscanf precisa
             char* str = (char*)rxValue.c_str();
             
             // Variáveis temporárias para o comando
@@ -143,7 +144,6 @@ void init_ble_server() {
 
     // --- Inicialização do Caching (CRÍTICO) ---
     // CORREÇÃO: Força o cache da característica ALL_PROFILES a ser o conteúdo atual da EEPROM.
-    // Isso garante que o valor inicial não seja lixo antigo.
     EmdrAllProfiles_t initialProfiles;
     loadAllProfiles(&initialProfiles); 
     pAllProfilesCharacteristic->setValue((uint8_t*)&initialProfiles, sizeof(EmdrAllProfiles_t));
