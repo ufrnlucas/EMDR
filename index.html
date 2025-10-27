@@ -4,7 +4,7 @@
     <title>Dispositivo EMDR - Web BLE App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* Estilos Omitidos para concisão */
+        /* Estilos Responsivos */
         body { font-family: Arial, sans-serif; margin: 10px; background-color: #f4f4f9; color: #333; }
         h1, h2 { color: #007bff; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-top: 15px; }
         input[type="number"], select, button { width: 100%; box-sizing: border-box; padding: 10px; margin: 8px 0; border-radius: 5px; }
@@ -302,6 +302,7 @@
                     const byte3 = dataView.getUint8(offset + 3);
 
                     // Cálculo Little-Endian: B0 + B1*256 + B2*65536 + B3*16777216
+                    // Nota: o JS interpreta isso como float para números grandes, mas deve funcionar para 500/5000ms.
                     const durationMs = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216);
                     // --- FIM: LEITURA MANUAL LITTLE-ENDIAN ---
 
