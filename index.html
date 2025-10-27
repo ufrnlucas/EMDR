@@ -181,8 +181,11 @@
     disconnectButton.addEventListener('click', disconnectDevice);
 
 
-    // Evento para SALVAR (Ação 2)
-    saveButton.addEventListener('click', () => {
+    // Evento para SALVAR (Ação 2) - **CORRIGIDO: Previne Refresh**
+    saveButton.addEventListener('click', (event) => {
+        
+        event.preventDefault(); // <-- IMPEDE O REFRESH DA PÁGINA
+        
         const profileId = parseInt(profileSelector.value);
         if (profileId === 0) {
             alert("Selecione um Perfil (1-5) no seletor acima para SALVAR.");
@@ -261,21 +264,26 @@
 
 
     // ************************************************************
-    // 4. LEITURA DE PERFIS E STATUS
+    // 4. LEITURA DE PERFIS E STATUS (Versão Assíncrona e Robusta)
     // ************************************************************
 
-    // NOVO: Função para ler todos os 5 perfis de uma vez (35 bytes)
-    function readAllProfiles() {
-        let pProfilesCharacteristic;
+    async function readAllProfiles() {
         debugOutput.innerHTML = ''; // Limpa o debug ao iniciar a leitura
         logDebug("INICIANDO LEITURA DE 35 BYTES...");
 
-        return bleServiceFound.getCharacteristic(allProfilesCharacteristic)
-        .then(charAllProfiles => {
-            pProfilesCharacteristic = charAllProfiles;
-            return pProfilesCharacteristic.readValue();
-        })
-        .then(value => {
+        if (!bleServiceFound) {
+            logDebug("ERROR: Serviço BLE não encontrado. Conecte primeiro.");
+            return;
+        }
+
+        try {
+            // 1. OBTENÇÃO DA CARACTERÍSTICA
+            const charAllProfiles = await bleServiceFound.getCharacteristic(allProfilesCharacteristic);
+            
+            // 2. LEITURA DO VALOR (Isto deve disparar o onRead no ESP32)
+            const value = await charAllProfiles.readValue();
+            
+            // 3. PROCESSAMENTO
             if (value.byteLength === 35) {
                 const dataView = new DataView(value.buffer);
                 activeProfiles = [];
@@ -287,13 +295,13 @@
                 for (let i = 0; i < 5; i++) {
                     const offset = i * 7;
                     
-                    // --- INÍCIO: LEITURA MANUAL LITTLE-ENDIAN (Correção de Bug) ---
+                    // --- INÍCIO: LEITURA MANUAL LITTLE-ENDIAN (Correção de Duração/Uint32) ---
                     const byte0 = dataView.getUint8(offset + 0);
                     const byte1 = dataView.getUint8(offset + 1);
                     const byte2 = dataView.getUint8(offset + 2);
                     const byte3 = dataView.getUint8(offset + 3);
 
-                    // Calcula o valor Little-Endian: B0 + (B1 * 2^8) + (B2 * 2^16) + (B3 * 2^24)
+                    // Cálculo Little-Endian: B0 + B1*256 + B2*65536 + B3*16777216
                     const durationMs = byte0 + (byte1 * 256) + (byte2 * 65536) + (byte3 * 16777216);
                     // --- FIM: LEITURA MANUAL LITTLE-ENDIAN ---
 
@@ -331,10 +339,12 @@
             } else {
                 logDebug(`ERROR: Tamanho de pacote inesperado para perfis: ${value.byteLength} bytes. Esperado: 35 bytes.`);
             }
-        })
-        .catch(error => {
-            logDebug(`ERROR: Falha ao ler todos os perfis na conexão: ${error.message}`);
-        });
+        
+        } catch (error) {
+            // **ISTO VAI MOSTRAR POR QUE O READ ESTÁ FALHANDO!**
+            logDebug(`ERROR: Falha CRÍTICA ao ler todos os perfis: ${error.message}`);
+            console.error("Critical Read Failure:", error);
+        }
     }
 
     // Leitura da Configuração Ativa (Status - 7 bytes)

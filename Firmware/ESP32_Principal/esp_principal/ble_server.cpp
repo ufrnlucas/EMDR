@@ -99,10 +99,14 @@ class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
 // 3. CALLBACKS DE LEITURA (ALL_PROFILES)
 class AllProfilesCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onRead(BLECharacteristic* pCharacteristic) {
+        Serial.println(">>> DEBUG TESTE: CALLBACK ONREAD INICIADO <<<"); // <--- ADICIONE ISTO
+       
         Serial.println("[HUB]: Recebida requisicao de READ para ALL_PROFILES. Carregando 35 bytes...");
         
         EmdrAllProfiles_t allProfilesData;
         loadAllProfiles(&allProfilesData);
+
+        debugPrintHex((uint8_t*)&allProfilesData, sizeof(EmdrAllProfiles_t));
         
         pCharacteristic->setValue((uint8_t*)&allProfilesData, sizeof(EmdrAllProfiles_t));
         
@@ -164,4 +168,20 @@ void init_ble_server() {
     pAdvertising->addServiceUUID(SERVICE_UUID); 
     BLEDevice::startAdvertising();
     Serial.println("--- BLE Server Inicializado e Anunciando. ---");
+}
+
+// --- FUNÇÃO DE DEBUG HEX ---
+void debugPrintHex(const uint8_t* buffer, size_t length) {
+  Serial.print("[BLE_HEX_OUT]: ");
+  Serial.print(length);
+  Serial.print(" bytes = ");
+  for (size_t i = 0; i < length; i++) {
+    // Imprime o valor HEX do byte (com zero à esquerda se necessário)
+    if (buffer[i] < 0x10) {
+      Serial.print("0"); 
+    }
+    Serial.print(buffer[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
 }

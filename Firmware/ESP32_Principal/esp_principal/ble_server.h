@@ -6,3 +6,5 @@
 #include "emdr_logic.h"  // Necessário para a assinatura de handleCommand
 
 void init_ble_server();
+// NOVO: Declaração da função utilitária de debug HEX
+void debugPrintHex(const uint8_t* buffer, size_t length);
