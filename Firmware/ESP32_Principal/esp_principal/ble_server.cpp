@@ -1,19 +1,18 @@
 #include "ble_server.h"
 #include "global_vars.h"
-#include "profile_manager.h" // Necessário para loadAllProfiles
-#include "emdr_logic.h"      // Necessário para handleCommand
+#include "profile_manager.h" 
+#include "emdr_logic.h" 
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 
 // --- UUIDs do Serviço e Características ---
-#define SERVICE_UUID              "19b10000-e8f2-537e-4f6c-d104768a1214"
-#define STATUS_CHAR_UUID          "19b10001-e8f2-537e-4f6c-d104768a1214" // Status Ativo (7 bytes)
-#define COMMAND_CHAR_UUID         "19b10002-e8f2-537e-4f6c-d104768a1214" // Comando/Config (CSV String)
-#define AUX_COMMAND_CHAR_UUID     "19b10004-e8f2-537e-4f6c-d104768a1214" // Comando Auxiliar (1 byte)
-#define ALL_PROFILES_CHAR_UUID    "19b10005-e8f2-537e-4f6c-d104768a1214" // Todos os Perfis (35 bytes)
+#define SERVICE_UUID "19b10000-e8f2-537e-4f6c-d104768a1214"
+#define STATUS_CHAR_UUID "19b10001-e8f2-537e-4f6c-d104768a1214" 
+#define COMMAND_CHAR_UUID  "19b10002-e8f2-537e-4f6c-d104768a1214" 
+#define AUX_COMMAND_CHAR_UUID "19b10004-e8f2-537e-4f6c-d104768a1214" 
+#define ALL_PROFILES_CHAR_UUID "19b10005-e8f2-537e-4f6c-d104768a1214" 
 
 // --- Variáveis Globais (Definidas em global_vars.cpp) ---
-// Note: As declarações extern estão em global_vars.h, mas as definições estão em global_vars.cpp.
 
 // --- 1. FUNÇÃO DE DEBUG HEX (para o Serial Monitor) ---
 void debugPrintHex(const uint8_t* buffer, size_t length) {
@@ -47,12 +46,14 @@ class ServerCallbacks : public BLEServerCallbacks {
 // --- 3. CALLBACKS DE ESCRITA (COMMAND) ---
 class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* pCharacteristic) {
-        std::string rxValue = pCharacteristic->getValue();
+        // CORREÇÃO DE COMPILAÇÃO: Constrói std::string diretamente (usa c_str() implicitamente ou é compatível)
+        std::string rxValue(pCharacteristic->getValue().c_str());
 
         if (rxValue.length() > 0) {
             // Assume que o valor é uma string CSV: duration, intensity, command, actuatorMode, profileId, actionType
             Serial.printf("[DEBUG PARSE]: Conteudo lido: %s\n", rxValue.c_str());
 
+            // Usa c_str() para obter o ponteiro char* que sscanf precisa
             char* str = (char*)rxValue.c_str();
             
             // Variáveis temporárias para o comando
@@ -83,29 +84,29 @@ class CommandCharacteristicCallbacks : public BLECharacteristicCallbacks {
 
 // --- 4. CALLBACKS DE LEITURA (ALL_PROFILES) ---
 class AllProfilesCharacteristicCallbacks : public BLECharacteristicCallbacks {
-    void onRead(BLECharacteristic* pCharacteristic) {
+    void onRead(BLECharacteristic* pCharacteristic) {
         
         Serial.println(">>> DEBUG TESTE: CALLBACK ONREAD INICIADO <<<"); // TESTE DE EXECUÇÃO
 
-        Serial.println("[HUB]: Recebida requisicao de READ para ALL_PROFILES. Carregando 35 bytes...");
-        
-        EmdrAllProfiles_t allProfilesData;
-        loadAllProfiles(&allProfilesData);
-        
+        Serial.println("[HUB]: Recebida requisicao de READ para ALL_PROFILES. Carregando 35 bytes...");
+        
+        EmdrAllProfiles_t allProfilesData;
+        loadAllProfiles(&allProfilesData);
+        
         // DEBUG CRÍTICO - Imprime o buffer exato antes de enviar
         debugPrintHex((uint8_t*)&allProfilesData, sizeof(EmdrAllProfiles_t));
 
-        pCharacteristic->setValue((uint8_t*)&allProfilesData, sizeof(EmdrAllProfiles_t));
-        
-        Serial.printf("[HUB]: %d bytes de todos os perfis enviados.\n", sizeof(EmdrAllProfiles_t));
-    }
+        pCharacteristic->setValue((uint8_t*)&allProfilesData, sizeof(EmdrAllProfiles_t));
+        
+        Serial.printf("[HUB]: %d bytes de todos os perfis enviados.\n", sizeof(EmdrAllProfiles_t));
+    }
 };
 
 // --- 5. INICIALIZAÇÃO DO SERVIDOR BLE ---
 void init_ble_server() {
     Serial.println("[BLE]: Inicializando Servidor BLE...");
 
-    BLEDevice::init("ESP32");  // Substitua pelo nome desejado
+    BLEDevice::init("ESP32"); 
 
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks());
@@ -142,6 +143,7 @@ void init_ble_server() {
 
     // --- Inicialização do Caching (CRÍTICO) ---
     // CORREÇÃO: Força o cache da característica ALL_PROFILES a ser o conteúdo atual da EEPROM.
+    // Isso garante que o valor inicial não seja lixo antigo.
     EmdrAllProfiles_t initialProfiles;
     loadAllProfiles(&initialProfiles); 
     pAllProfilesCharacteristic->setValue((uint8_t*)&initialProfiles, sizeof(EmdrAllProfiles_t));
